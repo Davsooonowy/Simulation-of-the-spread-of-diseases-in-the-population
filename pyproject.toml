@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "pandemic-simulation"
+version = "0.1.0"
+description = "Multi-scale agent-based simulation of viral pandemic spread"
+requires-python = ">=3.10"
+dependencies = [
+    "mesa>=2.3,<3.0",   # Mesa 3.x introduces breaking API changes
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "seaborn>=0.13",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-cov"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
