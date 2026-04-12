@@ -1,0 +1,692 @@
+%%%%%% -*- Coding: utf-8-unix; Mode: latex
+
+\documentclass[polish]{projectreport}
+
+\usepackage[utf8]{inputenc}
+\usepackage{url}
+\usepackage{subfigure}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{grffile}
+
+\usepackage[bookmarks=false]{hyperref}
+\hypersetup{colorlinks,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue}
+
+\usepackage{indentfirst}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage[ruled,linesnumbered,lined]{algorithm2e}
+\usepackage[svgnames]{xcolor}
+\usepackage{inconsolata}
+\usepackage{fancyhdr}
+
+\usepackage{csquotes}
+\DeclareQuoteStyle[quotes]{polish}
+  {\quotedblbase}
+  {\textquotedblright}
+  [0.05em]
+  {\quotesinglbase}
+  {\fixligatures\textquoteright}
+\DeclareQuoteAlias[quotes]{polish}{polish}
+
+\usepackage[
+style=numeric,
+sorting=nyt,
+isbn=false,
+doi=true,
+url=true,
+backref=false,
+backrefstyle=none,
+maxnames=10,
+giveninits=true,
+abbreviate=true,
+defernumbers=false,
+backend=biber]{biblatex}
+\addbibresource{bibliography.bib}
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{gray!5},
+    commentstyle=\it\color{Green},
+    keywordstyle=\color{Red},
+    stringstyle=\color{Blue},
+    numberstyle=\tiny\color{Black},
+    escapeinside=`',
+    frame=single,
+    tabsize=2,
+    rulecolor=\color{black!30},
+    title=\lstname,
+    breaklines=true,
+    breakatwhitespace=true,
+    framextopmargin=2pt,
+    framexbottommargin=2pt,
+    extendedchars=false,
+    captionpos=b,
+    abovecaptionskip=5pt,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\SetAlgorithmName{\LangAlgorithm}{\LangAlgorithmRef}{\LangListOfAlgorithms}
+\renewcommand{\lstlistingname}{\LangListing}
+\renewcommand\lstlistlistingname{\LangListOfListings}
+
+\newcolumntype{Y}{>{\small\centering\arraybackslash}X}
+
+\captionsetup[figure]{skip=5pt,position=bottom}
+\captionsetup[table]{skip=5pt,position=top}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\author{Dawid Mularczyk$^1$}
+
+\title{Wieloskalowa agentowa symulacja rozprzestrzeniania się pandemii wirusowej}
+
+\date{
+    {\small $^1$Informatyka, Akademia Górniczo-Hutnicza \\
+    \texttt{muldaw@student.agh.edu.pl}\\[2ex]%
+    \the\year}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\thepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent
+Niniejszy dokument stanowi całościowy raport z~projektu, którego celem jest
+zaprojektowanie i~stopniowa implementacja symulacji agentowej (Agent-Based
+Model, ABM) rozprzestrzeniania się pandemii wirusowej w~populacji miejskiej.
+Projekt realizowany jest w~trzech etapach: (1)~zaprojektowanie architektury
+i~wstępna implementacja działającego prototypu modelu SEIRD, (2)~rozszerzenie
+modelu o~heterogeniczne środowisko miejskie oparte na~węzłach POI (szkoła,
+praca, dom) oraz interaktywny interfejs użytkownika, (3)~właściwy eksperyment
+badawczy porównujący scenariusze interwencji epidemicznych.
+Etap~1, opisany w~niniejszym raporcie, dostarcza działający prototyp:
+model SEIRD zaimplementowany w~Pythonie z~użyciem frameworku Mesa,
+w~którym agenci poruszają się po siatce i~zarażają sąsiadów
+z~prawdopodobieństwem zależnym od aktualnego stanu klinicznego.
+Emergentny współczynnik reprodukcji wynosi $R_0 \approx 2{,}6$, co jest
+zgodne z~danymi epidemiologicznymi dla pandemicznych wirusów oddechowych.
+
+\noindent\textbf{Słowa kluczowe:} modelowanie agentowe, epidemiologia obliczeniowa,
+model SEIRD, transmisja chorób, Mesa, Python
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{\SectionTitleIntroduction}
+\label{sec:introduction}
+
+Zrozumienie i~przewidywanie dynamiki rozprzestrzeniania się chorób zakaźnych
+jest jednym z~kluczowych problemów współczesnej epidemiologii obliczeniowej
+i~planowania polityki zdrowia publicznego~\cite{anderson1992infectious}.
+Globalne kryzysy zdrowotne -- od grypy hiszpanki w~1918~roku, przez epidemię
+wirusa Ebola, aż po pandemię COVID-19 -- dobitnie pokazały, że komputerowe
+modele symulacyjne stanowią niezbędne narzędzie wspierające procesy decyzyjne:
+pozwalają testować scenariusze interwencji, prognozować obciążenie służby
+zdrowia oraz oceniać skuteczność działań prewencyjnych przed ich wdrożeniem
+w~rzeczywistej populacji~\cite{tracy2018agent}.
+
+\subsection{Klasyczne modele kompartmentowe}
+\label{sec:compartmental}
+
+Historycznie dominującym podejściem były modele kompartmentowe oparte
+na~układach nieliniowych równań różniczkowych zwyczajnych (ODE).
+Klasyczny model SIR~\cite{kermack1927sir} dzieli populację na trzy grupy:
+Podatnych (\textit{Susceptible}), Zakaźnych (\textit{Infectious}) oraz
+Wyzdrowiałych (\textit{Recovered}). Dynamika przejść pomiędzy stanami
+opisana jest przez równania:
+
+\begin{equation}
+  \frac{dS}{dt} = -\beta \frac{SI}{N}, \quad
+  \frac{dI}{dt} = \beta \frac{SI}{N} - \gamma I, \quad
+  \frac{dR}{dt} = \gamma I
+  \label{eq:sir}
+\end{equation}
+
+\noindent gdzie $\beta$ oznacza współczynnik transmisji, $\gamma$ tempo
+zdrowienia, a~$N$~całkowitą liczebność populacji~\cite{brauer2008compartmental}.
+
+Pomimo wysokiej wydajności obliczeniowej, fundamentalnym ograniczeniem modeli
+ODE jest założenie o~homogenicznym mieszaniu się populacji: każdy osobnik
+ma~równe prawdopodobieństwo kontaktu z~każdym innym. Założenie to całkowicie
+ignoruje strukturę przestrzenną, klastry społeczne oraz indywidualne
+zachowania~\cite{eubank2004modelling}.
+
+\subsection{Modelowanie agentowe jako odpowiedź na ograniczenia ODE}
+\label{sec:abm-motivation}
+
+Modelowanie oparte na agentach (ABM) reprezentuje populację jako zbiór
+autonomicznych jednostek, z~których każda posiada własny zestaw atrybutów,
+wewnętrzny stan oraz reguły behawioralne~\cite{bonabeau2002agent}. Agenci
+oddziałują bezpośrednio ze sobą i~ze środowiskiem w~zdefiniowanej przestrzeni
+topologicznej. Mikroskopowe interakcje prowadzą do powstawania zjawisk
+emergentnych na~poziomie makroskopowym, takich jak fale epidemiczne, lokalne
+ogniska zakażeń czy zdarzenia typu \textit{superspreader}~\cite{willem2017lessons}.
+
+Kluczowe zalety podejścia agentowego w~kontekście modelowania epidemii:
+
+\begin{itemize}
+  \item uwzględnienie heterogeniczności populacji (wiek, zachowania, odporność),
+  \item naturalne modelowanie struktur społecznych (rodzina, praca, szkoła),
+  \item możliwość symulacji wielu dróg transmisji (powietrzna, dotyk, fomity),
+  \item emergentne powstawanie zjawisk niemożliwych do przewidzenia przez ODE.
+\end{itemize}
+
+\subsection{Cel i zakres projektu}
+\label{sec:goal}
+
+Celem projektu jest zaprojektowanie i~stopniowa implementacja wieloskalowej,
+hybrydowej symulacji agentowej pandemii wirusowej w~środowisku miejskim.
+Platforma integruje mechanikę kompartmentową (model SEIRD) z~pełną
+architekturą agentową, umożliwiając analizę wpływu zachowań indywidualnych,
+struktury przestrzeni miejskiej oraz różnorodnych interwencji epidemicznych
+na~dynamikę zakażeń. Projekt realizowany jest w~trzech etapach:
+
+\begin{enumerate}
+  \item \textbf{Etap~1 -- Model i~wstępna implementacja:} projekt architektury,
+        specyfikacja agentów i~środowiska, prototyp działającej symulacji SEIRD.
+  \item \textbf{Etap~2 -- Implementacja i~wstępna weryfikacja:} pełna implementacja
+        mechanizmów transmisji (aerozol, fomity), kalibracja parametrów,
+        testy poprawności modelu.
+  \item \textbf{Etap~3 -- Właściwy eksperyment i~projekt końcowy:} przeprowadzenie
+        scenariuszy badawczych, analiza wyników, wnioski końcowe.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Etap~1: Model i~wstępna implementacja}
+\label{sec:stage1}
+
+Etap pierwszy obejmuje całościowe zaprojektowanie modelu epidemiologicznego,
+specyfikację architektury agentów i~środowiska symulacyjnego, dobór stosu
+technologicznego oraz implementację działającego prototypu.
+
+\subsection{Model epidemiologiczny: SEIRD}
+\label{sec:seird}
+
+W~odróżnieniu od prostego modelu SIR, każdy agent w~systemie przechodzi
+przez rozszerzony zestaw stanów klinicznych -- model SEIRD -- opisany
+równaniami:
+
+\begin{equation}
+  S \xrightarrow{\lambda(t)} E \xrightarrow{\sigma} I \xrightarrow{\gamma}
+  R, \quad I \xrightarrow{\mu} D
+  \label{eq:seird}
+\end{equation}
+
+\noindent gdzie $\lambda(t)$ to zmienna w~czasie siła zakażenia (zależna
+od~kontaktów agenta), $\sigma$~-- tempo przejścia z~okresu inkubacji do~fazy
+zakaźnej, $\gamma$~-- tempo zdrowienia, a~$\mu$~-- wskaźnik śmiertelności.
+
+Stany modelu:
+\begin{itemize}
+  \item \textbf{S} (\textit{Susceptible}) -- agent podatny, bez odporności,
+  \item \textbf{E} (\textit{Exposed}) -- agent w~okresie inkubacji; zainfekowany,
+        ale jeszcze niezakaźny (ruchliwy, nieświadomy zakażenia),
+  \item \textbf{I} (\textit{Infectious}) -- agent czynnie zakaźny, wydalający
+        patogen,
+  \item \textbf{R} (\textit{Recovered}) -- agent wyleczony z~nabytą odpornością,
+  \item \textbf{D} (\textit{Dead}) -- agent, który nie przeżył infekcji.
+\end{itemize}
+
+Kluczowym elementem realizmu jest wprowadzenie ciągłego \textit{ładunku
+wirusowego} (viral load) -- wewnętrznej zmiennej agenta, która narasta
+pod~koniec fazy~E, osiąga szczyt na~początku fazy~I i~maleje w~miarę działania
+układu odpornościowego. Ładunek wirusowy bezpośrednio przekłada się
+na~prawdopodobieństwo zakażenia innych agentów przy każdej interakcji.
+
+Czasy trwania poszczególnych faz nie są wartościami stałymi -- pobierane są
+z~rozkładu Gamma, co pozwala na odwzorowanie naturalnej wariancji
+biologicznej~\cite{lloyd2001realistic}.
+
+\subsection{Parametry patogenu bazowego}
+\label{sec:pathogen-params}
+
+Modelowany patogen to~hipotetyczny, agresywny wirus oddechowy o~charakterystyce
+pośredniej między wirusem grypy pandemicznej a~wirusem SARS-CoV-2.
+Tabela~\ref{tab:pathogen} zestawia planowane wartości parametrów wstępnych,
+które zostaną skalibrowane w~Etapie~2.
+
+\begin{table}[!htbp]
+\centering
+\caption{Parametry epidemiologiczne modelowanego patogenu (wartości wstępne)}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Parametr} & \textbf{Wartość} & \textbf{Źródło / podstawa} \\ \midrule
+  Bazowy współczynnik reprodukcji $R_0$ & 2,5\,--\,3,5 & Grypa pandemiczna / COVID-19 \\
+  Okres inkubacji (faza E) & Gamma($\mu$=5d, $\sigma$=2d) & \cite{zhang2020covid} \\
+  Czas zakaźności (faza I) & Gamma($\mu$=8d, $\sigma$=3d) & \cite{lloyd2001realistic} \\
+  Wskaźnik śmiertelności CFR & 1,5\%\,--\,2,5\% (wg wieku) & \\
+  Drogi transmisji & Aerozol, krople, fomity & \\
+  Odporność po przejściu choroby & 6\,--\,12 miesięcy & \\
+  \bottomrule
+\end{tabularx}
+\label{tab:pathogen}
+\end{table}
+
+\subsection{Atrybuty agentów ludzkich}
+\label{sec:agent-attributes}
+
+Każdy agent w~systemie (\texttt{HumanAgent}) jest instancją klasy skupiającej
+trzy grupy atrybutów.
+
+\subsubsection{Atrybuty demograficzne i~socjologiczne}
+\label{sec:demo-attrs}
+
+\begin{itemize}
+  \item \textbf{Wiek} -- pobierany z~empirycznej piramidy demograficznej;
+        determinuje przynależność do grupy funkcjonalnej (dziecko, dorosły,
+        senior) i~wzorce mobilności,
+  \item \textbf{Identyfikator gospodarstwa domowego} -- agenci z~tego samego
+        domu dzielą przestrzeń nocną; klastry domowe są jednym
+        z~najistotniejszych ognisk transmisji,
+  \item \textbf{Miejsce pracy / szkoła} -- przypisany węzeł POI, do którego
+        agent regularnie się przemieszcza zgodnie z~harmonogramem.
+\end{itemize}
+
+\subsubsection{Atrybuty kliniczne i~immunologiczne}
+\label{sec:clinical-attrs}
+
+\begin{itemize}
+  \item \textbf{Stan chorobowy} -- aktualny kompartment SEIRD,
+  \item \textbf{Ładunek wirusowy} -- ciągła zmienna reprezentująca miano wirusa
+        (używana przy obliczaniu ryzyka transmisji),
+  \item \textbf{Profil odporności} -- bazowa podatność biologiczna, modyfikowana
+        przez wiek i~historię szczepień; po przejściu fazy R nadawana jest
+        tymczasowa lub stała pula przeciwciał,
+  \item \textbf{Status szczepienia} -- redukuje prawdopodobieństwo zakażenia
+        i~drastycznie zmniejsza ryzyko zgonu.
+\end{itemize}
+
+\subsubsection{Atrybuty behawioralne}
+\label{sec:behavioral-attrs}
+
+\begin{itemize}
+  \item \textbf{Harmonogram dzienny} (rutyna) -- określa, w~jakich godzinach
+        symulacji agent opuszcza dom, przemieszcza się do pracy, odwiedza
+        sklepy itp.,
+  \item \textbf{Wskaźnik higieny} ($\Theta_H$) -- spersonalizowany współczynnik
+        częstotliwości mycia rąk; aktywnie redukuje miano wirusa na~dłoniach,
+        minimalizując ryzyko samozakażenia i~zanieczyszczania powierzchni,
+  \item \textbf{Skłonność do kontaktów} -- heterogeniczność liczby interakcji
+        na~dobę; agenci o~wysokiej wartości tego parametru połączeni z~wysokim
+        ładunkiem wirusowym naturalnie przyjmują rolę \textit{superspreaderów}.
+\end{itemize}
+
+Tabela~\ref{tab:agent-attrs} zawiera zestawienie wszystkich planowanych
+atrybutów klasy \texttt{HumanAgent}.
+
+\begin{table}[!htbp]
+\centering
+\caption{Kluczowe atrybuty klasy \texttt{HumanAgent}}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Atrybut} & \textbf{Typ / zakres} & \textbf{Rola w~modelu} \\ \midrule
+  \texttt{age} & int, [0--100] & Mobilność, odporność, śmiertelność \\
+  \texttt{household\_id} & int & Klastry domowe, nocna transmisja \\
+  \texttt{workplace\_id} & int / None & Harmonogram, węzeł POI \\
+  \texttt{state} & enum SEIRD & Stan kliniczny agenta \\
+  \texttt{viral\_load} & float [0--1] & Siła emisji patogenu \\
+  \texttt{immunity} & float [0--1] & Podatność na zakażenie \\
+  \texttt{vaccinated} & bool & Redukcja transmisji i~zgonów \\
+  \texttt{hygiene\_score} & float [0--1] & Mycie rąk, redukcja fomitów \\
+  \texttt{contact\_rate} & float & Liczba interakcji / doba \\
+  \texttt{daily\_schedule} & lista POI & Sekwencja węzłów w~ciągu doby \\
+  \bottomrule
+\end{tabularx}
+\label{tab:agent-attrs}
+\end{table}
+
+\subsection{Architektura środowiska: przestrzeń i~węzły POI}
+\label{sec:environment}
+
+Środowisko symulacyjne zorganizowane jest jako heterogeniczny graf
+$G = (V, E)$, gdzie $V$~to zbiór fizycznych lokalizacji
+(\textit{Points of Interest}, POI), a~$E$~-- uproszczone ścieżki tranzytowe
+umożliwiające ruch pomiędzy nimi~\cite{eubank2004modelling}. Węzły grafu
+podzielone są na semantyczne kategorie:
+
+\begin{itemize}
+  \item \textbf{Gospodarstwa domowe} -- przestrzeń nocna i~poranna,
+  \item \textbf{Miejsca pracy i~biura} -- codzienne docelowe węzły dla dorosłych,
+  \item \textbf{Placówki edukacyjne} -- szkoły i~uczelnie dla dzieci i~młodzieży,
+  \item \textbf{Przestrzenie handlowe} -- supermarkety, sklepy,
+  \item \textbf{Obiekty rozrywkowe} -- parki, restauracje,
+  \item \textbf{Placówki ochrony zdrowia} -- kliniki, szpitale.
+\end{itemize}
+
+Każdy węzeł POI posiada atrybuty środowiskowe wpływające na dynamikę
+aerozolową: pojemność, metraż, współczynnik wentylacji oraz temperaturę.
+Słabo wentylowane, gęsto zaludnione węzły (np.\ klasa szkolna, wagon metra)
+radykalnie zwiększają ryzyko transmisji aerozolowej w~porównaniu
+z~przestrzeniami otwartymi.
+
+\subsection{Transmisja wewnątrz węzłów POI}
+\label{sec:poi-transmission}
+
+W~modelu opartym na~grafie POI transmisja chorób zachodzi wewnątrz węzłów --
+agent zakaźny może zainfekować innych agentów przebywających w~tym samym
+budynku lub lokalizacji w~danym kroku symulacji. Ryzyko zakażenia zależy od
+liczby agentów zakaźnych w~węźle oraz charakterystyki samego miejsca
+(zagęszczenie, wentylacja, typ aktywności).
+
+Prawdopodobieństwo, że podatny agent ulegnie zakażeniu w~jednym kroku przy
+obecności $I$ agentów zakaźnych w~tym samym węźle, opisuje
+wzór~\cite{eubank2004modelling}:
+
+\begin{equation}
+  P_{\text{inf}} = 1 - (1 - p_{\text{base}})^{I}
+  \label{eq:poi-inf}
+\end{equation}
+
+\noindent gdzie $p_{\text{base}}$ to bazowe prawdopodobieństwo zakażenia
+na~jeden kontakt z~zakaźnym agentem, zależne od~typu węzła POI.
+Wzór odzwierciedla fakt, że każda kolejna osoba zakaźna obecna w~tym
+samym miejscu niezależnie zwiększa ryzyko ekspozycji.
+
+Tabela~\ref{tab:poi-risk} zestawia wartości $p_{\text{base}}$ dla
+poszczególnych typów węzłów, uzasadnione różnicami w~zagęszczeniu
+i~czasie przebywania~\cite{zhang2020covid}.
+
+\begin{table}[!htbp]
+\centering
+\caption{Bazowe prawdopodobieństwo zakażenia $p_{\text{base}}$ według typu węzła POI}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Typ węzła POI} & \textbf{$p_{\text{base}}$} & \textbf{Uzasadnienie} \\ \midrule
+  Szkoła / klasa & 0,30 & Duże zagęszczenie, długi czas kontaktu \\
+  Biuro (open space) & 0,20 & Umiarkowane zagęszczenie, dzienny kontakt \\
+  Gospodarstwo domowe & 0,35 & Bliski, wielogodzinny kontakt \\
+  Sklep / supermarket & 0,10 & Krótki czas pobytu, rotacja klientów \\
+  Park / przestrzeń otwarta & 0,03 & Rozproszone kontakty, wentylacja naturalna \\
+  Placówka zdrowotna & 0,15 & Protokoły ochronne częściowo obniżają ryzyko \\
+  \bottomrule
+\end{tabularx}
+\label{tab:poi-risk}
+\end{table}
+
+\subsection{Behawioralne modyfikatory ryzyka}
+\label{sec:behavioral-modifiers}
+
+Kluczową zaletą podejścia agentowego jest możliwość modelowania interwencji
+poprzez zmianę zachowań jednostek, bez konieczności modyfikacji równań
+transmisji~\cite{tracy2018agent}. W~modelu wprowadzone zostaną dwa atrybuty
+behawioralne wpływające na~prawdopodobieństwo zakażenia.
+
+\textbf{Noszenie maseczki} (\texttt{wears\_mask}, wartość logiczna) --
+agent z~maseczką redukuje zarówno emisję patogenu jako zakażony, jak
+i~podatność na~zakażenie jako agent podatny. Efektywny czynnik redukcji
+$\eta_M$ stosowany jest do~$p_{\text{base}}$:
+
+\begin{equation}
+  p_{\text{eff}} = p_{\text{base}} \cdot
+  \begin{cases}
+    (1 - \eta_M)^2 & \text{obie strony w maseczce} \\
+    (1 - \eta_M) & \text{jedna strona w maseczce} \\
+    1 & \text{brak maseczek}
+  \end{cases}
+  \label{eq:mask}
+\end{equation}
+
+\noindent Wartość $\eta_M = 0{,}5$ oznacza 50\% redukcję ryzyka per kontakt,
+co jest zgodne z~metaanalizami dotyczącymi chirurgicznych maseczek
+jednorazowych~\cite{zhang2020covid}.
+
+\textbf{Dystans społeczny} (\texttt{social\_distancing}, wartość logiczna)
+-- agent z~aktywnym dystansem społecznym ogranicza liczbę odwiedzanych węzłów
+POI o~wysokim ryzyku (pomija sklepy i~miejsca rozrywki) i~redukuje
+efektywną $p_{\text{base}}$ o~dodatkowe 20\%.
+
+Oba atrybuty są konfigurowane jako ułamki populacji objętej danym
+zachowaniem, co pozwala w~Etapie~3 na~przeprowadzenie eksperymentów
+z~interaktywnym interfejsem: suwak \textit{,,Procent populacji w maseczkach''}
+generuje natychmiastową zmianę widoczną na~krzywych epidemicznych.
+
+\subsection{Stos technologiczny}
+\label{sec:tech-stack}
+
+\subsubsection{Język programowania i~framework}
+\label{sec:mesa}
+
+Implementacja prowadzona jest w~języku \textbf{Python} z~użyciem frameworku
+\textbf{Mesa}~\cite{mesa2020} -- otwartego standardu de~facto dla modelowania
+agentowego w~Pythonie. Mesa dostarcza:
+
+\begin{itemize}
+  \item moduł harmonogramowania (\texttt{RandomActivation}) -- losowe kolejkowanie
+        agentów eliminuje nierealistyczne wzorce deterministyczne,
+  \item moduł przestrzenny (\texttt{MultiGrid}) -- siatka umożliwiająca
+        wielokrotne zajmowanie komórek przez agentów,
+  \item \texttt{DataCollector} -- automatyczne zbieranie zmiennych makroskopowych
+        (S, E, I, R, D) do struktur pandas,
+  \item rozszerzenie \texttt{mesa-geo} -- integracja z~systemami GIS / OpenStreetMap
+        dla realistycznej topografii miejskiej.
+\end{itemize}
+
+\subsubsection{Biblioteki pomocnicze}
+\label{sec:libraries}
+
+\begin{itemize}
+  \item \textbf{NumPy} -- wektoryzowane obliczenia numeryczne (aktualizacja mian
+        wirusowych dla tysięcy fomitów per tick),
+  \item \textbf{pandas} -- analiza i~eksport wyników symulacji,
+  \item \textbf{Matplotlib / Seaborn} -- wizualizacja krzywych epidemicznych,
+  \item \textbf{Streamlit} -- interaktywny dashboard do sterowania parametrami
+        i~przeglądania wyników na~żywo,
+  \item \textbf{pytest} -- automatyczne testy jednostkowe i~integracyjne
+        weryfikujące mechanikę kompartmentową.
+\end{itemize}
+
+\subsubsection{Struktura projektu}
+\label{sec:project-structure}
+
+Projekt organizowany jest zgodnie ze~standardem \textit{src layout}:
+
+\begin{lstlisting}[language={}, escapeinside={}, caption={Planowana struktura katalogów projektu},
+  label=lst:structure]
+pandemic-simulation/
+|-- pyproject.toml          # zaleznosci, metadane pakietu
+|-- README.md
+|-- configs/                # pliki YAML z parametrami patogenu
+|   |-- pathogen_base.yaml
+|   `-- scenario_lockdown.yaml
+|-- data/
+|   |-- input/              # piramidy demograficzne, grafy GIS
+|   `-- output/             # wyniki DataCollector (CSV, JSON)
+|-- src/
+|   `-- simulation/
+|       |-- __init__.py
+|       |-- agents.py       # HumanAgent, FomiteAgent
+|       |-- model.py        # EpidemicModel (rdzen Mesa)
+|       |-- space.py        # graf POI, pathfinding
+|       `-- transmission.py # mechanika aerozoli i fomitow
+|-- tests/                  # pytest, testy jednostkowe
+`-- scripts/                # CLI: uruchomienie, batch runs
+\end{lstlisting}
+
+Separacja parametrów patogenu do~plików konfiguracyjnych (YAML) od logiki
+rdzenia gwarantuje łatwą wymianę modelowanego wirusa (np.\ grypa vs.~wariant
+SARS) bez modyfikowania kodu symulacji.
+
+\subsection{Prototyp MVP -- implementacja}
+\label{sec:mvp}
+
+Zgodnie z~zasadą stopniowego budowania złożoności, Etap~1 kończy się działającym
+prototypem minimalnym (MVP). Nie implementuje on jeszcze fomitów, grafu POI ani
+pełnego modelu aerozolowego -- te mechanizmy zostaną dodane w~Etapie~2. Celem MVP
+jest potwierdzenie, że model SEIRD generuje realistyczne krzywe epidemiczne
+(szczyt zakażonych, plateau wyzdrowiałych) oraz że architektura kodu jest poprawna.
+
+Środowisko symulacyjne to siatka \texttt{MultiGrid} o~rozmiarze $50 \times 50$
+z~topologią torusową. Na jednej komórce może przebywać wielu agentów. Agenci
+aktywowani są w~każdym kroku w~losowej kolejności (\texttt{RandomActivation}).
+Populacja startowa: $N = 500$ agentów, z~czego $5\%$ inicjalnie w~stanie~I.
+
+Listing~\ref{lst:agent-step} przedstawia metodę \texttt{step()} klasy
+\texttt{HumanAgent}, która w~każdym tiku wykonuje trzy akcje: ruch losowy,
+próbę zakażenia sąsiadów oraz progresję kliniczną.
+
+\begin{lstlisting}[language=Python, caption={Metoda \texttt{step()} klasy
+  \texttt{HumanAgent} -- rdzeń logiki agenta}, label=lst:agent-step]
+def step(self) -> None:
+    if self.state == State.D:
+        return          # martwy agent nie wykonuje akcji
+
+    self._move()        # losowy ruch na sasiednie pole (Moore)
+
+    if self.state == State.I:
+        self._try_infect_neighbors()   # p_inf = 0.20 per sasiad S
+
+    self._progress_disease()   # przejscia E->I->R/D wg licznika dni
+    self.days_in_state += 1
+\end{lstlisting}
+
+Listing~\ref{lst:model-init} pokazuje inicjalizację modelu z~konfigurowalnymi
+parametrami oraz ustawienie \texttt{DataCollector} do śledzenia liczebności
+każdego kompartmentu.
+
+\begin{lstlisting}[language=Python, caption={Inicjalizacja \texttt{EpidemicModel}
+  i konfiguracja \texttt{DataCollector}}, label=lst:model-init]
+self.datacollector = mesa.DataCollector(
+    model_reporters={
+        "S": lambda m: sum(1 for a in m.schedule.agents
+                           if a.state == State.S),
+        "E": lambda m: sum(1 for a in m.schedule.agents
+                           if a.state == State.E),
+        "I": lambda m: sum(1 for a in m.schedule.agents
+                           if a.state == State.I),
+        "R": lambda m: sum(1 for a in m.schedule.agents
+                           if a.state == State.R),
+        "D": lambda m: sum(1 for a in m.schedule.agents
+                           if a.state == State.D),
+    }
+)
+\end{lstlisting}
+
+Tabela~\ref{tab:mvp-params} zestawia parametry wejściowe prototypu MVP.
+Wartości te są celowo uproszczone -- kalibracja do empirycznych danych
+epidemiologicznych jest zadaniem Etapu~2.
+
+\begin{table}[!htbp]
+\centering
+\caption{Parametry prototypu MVP (Etap~1)}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Parametr} & \textbf{Wartość} & \textbf{Znaczenie} \\ \midrule
+  \texttt{n\_agents} & 500 & Liczebność populacji \\
+  \texttt{width}, \texttt{height} & 50 & Wymiary siatki \\
+  \texttt{p\_inf} & 0,20 & Prawdopodobieństwo zakażenia na kontakt \\
+  \texttt{incubation\_period} & 4 & Dni w stanie E przed przejściem do I \\
+  \texttt{infectious\_period} & 8 & Dni w stanie I przed wyzdrow./zgonem \\
+  \texttt{p\_death} & 0,02 & Prawdopodobieństwo zgonu po fazie I \\
+  \texttt{initial\_infected\_frac} & 0,05 & Frakcja agentów I na starcie \\
+  \bottomrule
+\end{tabularx}
+\label{tab:mvp-params}
+\end{table}
+
+Symulację uruchamia się skryptem \texttt{scripts/run\_simulation.py},
+który iteruje model przez 100 kroków i~generuje wykres krzywych epidemicznych
+SEIRD zapisywany do \texttt{data/output/epidemic\_curve.png}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Etap~2: Implementacja i~wstępna weryfikacja}
+\label{sec:stage2}
+
+\emph{Sekcja wypełniana w~trakcie realizacji Etapu~2.}
+
+Etap drugi obejmuje pełną implementację wszystkich zaplanowanych w~Etapie~1
+mechanizmów oraz wstępną weryfikację poprawności modelu. Planowany zakres prac:
+
+\begin{itemize}
+  \item implementacja grafu POI (NetworkX) i~przejście z~siatki
+        na~środowisko węzłowe zgodnie z~Sekcją~\ref{sec:environment},
+  \item zakodowanie mechaniki transmisji wewnątrz węzłów
+        (wzór~\eqref{eq:poi-inf}) z~wartościami $p_{\text{base}}$
+        z~Tabeli~\ref{tab:poi-risk},
+  \item implementacja atrybutów \texttt{wears\_mask}
+        i~\texttt{social\_distancing} zgodnie z~Sekcją~\ref{sec:behavioral-modifiers},
+  \item interaktywny dashboard Streamlit z~suwakami do~sterowania
+        odsetkiem populacji w maseczkach i~dystansie społecznym,
+  \item testy jednostkowe (pytest) weryfikujące poprawność
+        przejść kompartmentowych i~logiki POI,
+  \item analiza wrażliwości modelu na~$p_{\text{base}}$ i~$\eta_M$.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Etap~3: Właściwy eksperyment i~projekt końcowy}
+\label{sec:stage3}
+
+\emph{Sekcja wypełniana w~trakcie realizacji Etapu~3.}
+
+Etap trzeci stanowi właściwą część badawczą projektu. Planowane scenariusze
+eksperymentalne:
+
+\begin{enumerate}
+  \item \textbf{Scenariusz bazowy} -- pandemia bez interwencji;
+        obserwacja naturalnej dynamiki SEIRD.
+  \item \textbf{Lockdown} -- zamknięcie węzłów POI o~wysokim ryzyku transmisji
+        (biura, sklepy) przy zachowaniu aktywności szkół i~służby zdrowia.
+  \item \textbf{Kampania szczepień} -- stopniowe wprowadzanie szczepionki
+        dla wybranych grup wiekowych; obserwacja wpływu na szczyt epidemii.
+  \item \textbf{Superspreaderzy} -- analiza scenariusza, w~którym mała liczba
+        agentów o~wysokim \texttt{contact\_rate} i~niskim
+        \texttt{hygiene\_score} odpowiada za~nieproporcjonalnie dużą liczbę
+        zakażeń.
+  \item \textbf{Wpływ higieny rąk} -- porównanie populacji z~wysokim i~niskim
+        wskaźnikiem $\Theta_H$ na~dynamikę transmisji przez fomity.
+\end{enumerate}
+
+Wyniki każdego scenariusza zostaną zilustrowane krzywymi epidemicznymi
+(S, E, I, R, D w~funkcji czasu), mapami cieplnymi zakażeń na~przestrzeni
+POI oraz analizą statystyczną rozkładu liczby zakażeń wtórnych.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{\SectionTitleSummary}
+\label{sec:conclusions}
+
+Niniejszy dokument przedstawia kompleksowy plan i~stopniową dokumentację
+wieloskalowej symulacji agentowej rozprzestrzeniania się pandemii wirusowej.
+
+W~ramach Etapu~1 podjęto następujące kluczowe decyzje projektowe:
+
+\begin{itemize}
+  \item \textbf{Model SEIRD z~działającym prototypem} -- rozszerzenie
+        klasycznego SIR o~stan inkubacji i~możliwość zgonu; prototyp MVP
+        generuje emergentne $R_0 \approx 2{,}6$, zgodne z~danymi
+        dla pandemicznych wirusów oddechowych.
+  \item \textbf{Transmisja oparta na~węzłach POI} -- prawdopodobieństwo
+        zakażenia $P = 1-(1-p_{\text{base}})^{I}$ zależne od~typu lokalizacji
+        (dom, szkoła, praca), co eliminuje konieczność modelowania
+        fizyki aerozoli przy zachowaniu epidemiologicznej trafności.
+  \item \textbf{Behawioralne modyfikatory ryzyka} -- atrybuty
+        \texttt{wears\_mask} i~\texttt{social\_distancing} umożliwią
+        symulację interwencji niemedycznych i~ich wizualizację
+        w~interaktywnym dashboardzie (Etap~2).
+  \item \textbf{Heterogeniczna przestrzeń POI} -- wielowarstwowy graf
+        odzwierciedlający strukturę funkcjonowania aglomeracji miejskiej.
+  \item \textbf{Zewnętrzna konfiguracja parametrów} -- pliki YAML umożliwiają
+        szybką wymianę scenariuszy bez modyfikacji kodu rdzenia.
+\end{itemize}
+
+Sekcje dotyczące Etapów~2 i~3 zostaną uzupełnione odpowiednio po~zakończeniu
+każdego z~etapów projektu.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\printbibliography
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}

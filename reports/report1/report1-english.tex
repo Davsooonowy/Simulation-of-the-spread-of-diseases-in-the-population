@@ -1,0 +1,565 @@
+%%%%%% -*- Coding: utf-8-unix; Mode: latex
+
+\documentclass[english]{projectreport}
+
+\usepackage[utf8]{inputenc}
+\usepackage{url}
+\usepackage{subfigure}
+\usepackage{tabularx}
+\usepackage{ragged2e}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{grffile}
+\usepackage{amsmath}
+
+\usepackage[bookmarks=false]{hyperref}
+\hypersetup{colorlinks,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue}
+
+\usepackage{indentfirst}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage[ruled,linesnumbered,lined]{algorithm2e}
+\usepackage[svgnames]{xcolor}
+\usepackage{inconsolata}
+\usepackage{fancyhdr}
+
+\usepackage[
+style=numeric,
+sorting=nyt,
+isbn=false,
+doi=true,
+url=true,
+backref=false,
+backrefstyle=none,
+maxnames=10,
+giveninits=true,
+abbreviate=true,
+defernumbers=false,
+backend=biber]{biblatex}
+\addbibresource{bibliography.bib}
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\footnotesize,
+    backgroundcolor=\color{gray!5},
+    commentstyle=\color{Green},
+    keywordstyle=\color{Red},
+    stringstyle=\color{Blue},
+    numberstyle=\tiny\color{Black},
+    escapeinside=`',
+    frame=single,
+    tabsize=2,
+    rulecolor=\color{black!30},
+    title=\lstname,
+    breaklines=true,
+    breakatwhitespace=true,
+    framextopmargin=2pt,
+    framexbottommargin=2pt,
+    extendedchars=false,
+    captionpos=b,
+    abovecaptionskip=5pt,
+    keepspaces=true,
+    numbers=left,
+    numbersep=5pt,
+    showspaces=false,
+    showstringspaces=false,
+    showtabs=false,
+    tabsize=2
+}
+
+\SetAlgorithmName{\LangAlgorithm}{\LangAlgorithmRef}{\LangListOfAlgorithms}
+\renewcommand{\lstlistingname}{\LangListing}
+\renewcommand\lstlistlistingname{\LangListOfListings}
+
+\newcolumntype{Y}{>{\small\centering\arraybackslash}X}
+
+\captionsetup[figure]{skip=5pt,position=bottom}
+\captionsetup[table]{skip=5pt,position=top}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\author{Dawid Mularczyk$^1$}
+
+\title{Multi-scale Agent-Based Simulation of Viral Pandemic Spread}
+
+\date{
+    {\small $^1$Computer Science, AGH University of Science and Technology \\
+    \texttt{muldaw@student.agh.edu.pl}\\[2ex]%
+    \the\year}
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[LE,RO]{\thepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent
+This document is a comprehensive report for a project focused on the design
+and implementation of a multi-scale Agent-Based Model (ABM) simulating the
+spread of a viral pandemic in an urban population. The project is carried out
+in three stages: (1)~model design and initial implementation, (2)~full
+implementation with preliminary verification and potential revisions,
+(3)~proper experimental research and final project. The simulation platform
+is built in Python using the Mesa framework. It implements a SEIRD model with
+a continuous viral load variable and three transmission mechanisms: aerosol,
+droplet, and indirect contact through contaminated surfaces (fomites).
+
+\noindent\textbf{Keywords:} agent-based modeling, computational epidemiology,
+SEIRD model, disease transmission, Mesa, Python, fomites
+\end{abstract}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{\SectionTitleIntroduction}
+\label{sec:introduction}
+
+Understanding and predicting the dynamics of infectious disease spread is one
+of the central challenges in modern computational epidemiology and public
+health policy planning~\cite{anderson1992infectious}. Global health crises ---
+from the 1918 Spanish flu, through the West African Ebola outbreak, to the
+COVID-19 pandemic --- have demonstrated that computer simulation models are
+indispensable decision-support tools: they allow testing intervention
+scenarios, forecasting healthcare system load, and evaluating the effectiveness
+of preventive measures before their real-world deployment~\cite{tracy2018agent}.
+
+\subsection{Classical Compartmental Models}
+\label{sec:compartmental}
+
+Historically, the dominant approach has been compartmental models based on
+systems of nonlinear ordinary differential equations (ODEs). The classical
+SIR model~\cite{kermack1927sir} partitions a population into three groups:
+Susceptible, Infectious, and Recovered. The transition dynamics are given by:
+
+\begin{equation}
+  \frac{dS}{dt} = -\beta \frac{SI}{N}, \quad
+  \frac{dI}{dt} = \beta \frac{SI}{N} - \gamma I, \quad
+  \frac{dR}{dt} = \gamma I
+  \label{eq:sir}
+\end{equation}
+
+\noindent where $\beta$ is the transmission rate, $\gamma$ the recovery rate,
+and $N$ the total population size~\cite{brauer2008compartmental}.
+
+Despite high computational efficiency, the fundamental limitation of ODE
+models is the homogeneous mixing assumption: every individual is equally
+likely to contact any other. This ignores spatial structure, social clusters,
+and individual behaviour~\cite{eubank2004modelling}.
+
+\subsection{Agent-Based Modeling as a Response to ODE Limitations}
+\label{sec:abm-motivation}
+
+Agent-based modeling (ABM) represents a population as a collection of
+autonomous individuals, each with their own set of attributes, internal state,
+and behavioural rules~\cite{bonabeau2002agent}. Agents interact directly with
+one another and with the environment in a defined topological space.
+Microscopic interactions give rise to emergent macroscopic phenomena such as
+epidemic waves, localised outbreak clusters, and superspreading
+events~\cite{willem2017lessons}.
+
+Key advantages of the agent-based approach for epidemic modeling:
+
+\begin{itemize}
+  \item explicit representation of population heterogeneity (age, behaviour,
+        immunity),
+  \item natural modeling of social structures (household, workplace, school),
+  \item simultaneous simulation of multiple transmission routes (airborne,
+        touch, fomites),
+  \item emergent phenomena that deterministic ODE models cannot capture.
+\end{itemize}
+
+\subsection{Project Aim and Scope}
+\label{sec:goal}
+
+The aim of this project is to incrementally design and implement a multi-scale,
+hybrid agent-based simulation of a viral pandemic in an urban environment. The
+platform integrates compartmental mechanics (SEIRD model) with a full agent
+architecture, enabling the analysis of individual behaviour, urban spatial
+structure, and diverse epidemiological interventions on infection dynamics.
+The project is structured into three stages:
+
+\begin{enumerate}
+  \item \textbf{Stage~1 --- Model and initial implementation:} architecture
+        design, agent and environment specification, working SEIRD prototype.
+  \item \textbf{Stage~2 --- Implementation and preliminary verification:} full
+        implementation of transmission mechanics, parameter calibration, model
+        correctness testing.
+  \item \textbf{Stage~3 --- Proper experiment and final project:} experimental
+        scenarios, results analysis, final conclusions.
+\end{enumerate}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Stage 1: Model and Initial Implementation}
+\label{sec:stage1}
+
+Stage~1 covers the complete design of the epidemiological model, specification
+of the agent and environment architecture, selection of the technology stack,
+and implementation of a working prototype.
+
+\subsection{Epidemiological Model: SEIRD}
+\label{sec:seird}
+
+Each agent in the system transitions through an extended set of clinical
+states --- the SEIRD model --- described by:
+
+\begin{equation}
+  S \;\xrightarrow{\lambda(t)}\; E \;\xrightarrow{\sigma}\; I
+  \;\xrightarrow{\gamma}\; R, \qquad I \;\xrightarrow{\mu}\; D
+  \label{eq:seird}
+\end{equation}
+
+\noindent where $\lambda(t)$ is the time-varying force of infection (dependent
+on the agent's contacts), $\sigma$ the rate of progression from the incubation
+period to the infectious phase, $\gamma$ the recovery rate, and $\mu$ the
+disease-induced mortality rate.
+
+The model states are:
+\begin{itemize}
+  \item \textbf{S} (\emph{Susceptible}) --- healthy agent with no immunity,
+  \item \textbf{E} (\emph{Exposed}) --- agent in the incubation period;
+        infected but not yet infectious (mobile, unaware of infection),
+  \item \textbf{I} (\emph{Infectious}) --- actively infectious agent shedding
+        pathogen,
+  \item \textbf{R} (\emph{Recovered}) --- recovered agent with acquired
+        immunity,
+  \item \textbf{D} (\emph{Dead}) --- agent that did not survive the infection.
+\end{itemize}
+
+A key realism element is a continuous \emph{viral load} --- an internal agent
+variable that rises toward the end of phase~E, peaks at the onset of phase~I,
+and declines as the immune response progresses. Viral load directly scales the
+probability of infecting neighbouring agents at each interaction step.
+
+Stage durations are not fixed constants; they are sampled from a Gamma
+distribution to capture natural biological variance~\cite{lloyd2001realistic}.
+
+\subsection{Base Pathogen Parameters}
+\label{sec:pathogen-params}
+
+The modelled pathogen is a hypothetical aggressive respiratory virus with
+characteristics intermediate between pandemic influenza and SARS-CoV-2.
+Table~\ref{tab:pathogen} lists the initial parameter values, which will be
+calibrated in Stage~2.
+
+\begin{table}[!htbp]
+\centering
+\caption{Epidemiological parameters of the modelled pathogen (initial values)}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Parameter} & \textbf{Value} & \textbf{Source / basis} \\ \midrule
+  Basic reproduction number $R_0$ & 2.5\,--\,3.5 & Pandemic flu / COVID-19 \\
+  Incubation period (phase E) & Gamma($\mu$=5d, $\sigma$=2d) & \cite{zhang2020covid} \\
+  Infectious duration (phase I) & Gamma($\mu$=8d, $\sigma$=3d) & \cite{lloyd2001realistic} \\
+  Case fatality rate (CFR) & 1.5\%\,--\,2.5\% (age-dependent) & \\
+  Transmission routes & Aerosol, droplets, fomites & \\
+  Post-infection immunity & 6\,--\,12 months & \\
+  \bottomrule
+\end{tabularx}
+\label{tab:pathogen}
+\end{table}
+
+\subsection{Human Agent Attributes}
+\label{sec:agent-attributes}
+
+Each agent in the system (\texttt{HumanAgent}) is an instance of a class
+aggregating three groups of attributes.
+
+\subsubsection{Demographic and Sociological Attributes}
+\label{sec:demo-attrs}
+
+\begin{itemize}
+  \item \textbf{Age} --- sampled from an empirical demographic pyramid;
+        determines assignment to a functional group (child, adult, senior)
+        and mobility patterns,
+  \item \textbf{Household ID} --- agents sharing a household occupy the same
+        space at night; household clusters are a primary transmission
+        environment,
+  \item \textbf{Workplace / school} --- an assigned POI node to which the
+        agent travels regularly according to their daily schedule.
+\end{itemize}
+
+\subsubsection{Clinical and Immunological Attributes}
+\label{sec:clinical-attrs}
+
+\begin{itemize}
+  \item \textbf{Disease state} --- current SEIRD compartment,
+  \item \textbf{Viral load} --- continuous variable representing pathogen
+        titre (used to compute transmission risk at each interaction),
+  \item \textbf{Immunity profile} --- baseline biological susceptibility,
+        modified by age and vaccination history; upon entering state~R the
+        agent gains a temporary or permanent antibody pool,
+  \item \textbf{Vaccination status} --- reduces infection probability and
+        drastically lowers the risk of disease-induced death.
+\end{itemize}
+
+\subsubsection{Behavioural Attributes}
+\label{sec:behavioral-attrs}
+
+\begin{itemize}
+  \item \textbf{Daily schedule} --- defines at which simulation hours the
+        agent leaves home, travels to work, visits shops, etc.,
+  \item \textbf{Hygiene score} ($\Theta_H$) --- personalised hand-washing
+        frequency coefficient; actively reduces pathogen titre on hands,
+        lowering the risk of self-inoculation and surface contamination,
+  \item \textbf{Contact rate} --- heterogeneity in the number of daily
+        interactions; agents with a high contact rate combined with a high
+        viral load naturally emerge as superspreaders.
+\end{itemize}
+
+Table~\ref{tab:agent-attrs} summarises all planned attributes of the
+\texttt{HumanAgent} class.
+
+\begin{table}[!htbp]
+\centering
+\caption{Key attributes of the \texttt{HumanAgent} class}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Attribute} & \textbf{Type / range} & \textbf{Role in model} \\ \midrule
+  \texttt{age} & int, [0--100] & Mobility, immunity, mortality \\
+  \texttt{household\_id} & int & Household clusters, nocturnal transmission \\
+  \texttt{workplace\_id} & int / None & Schedule, POI node \\
+  \texttt{state} & enum SEIRD & Agent clinical state \\
+  \texttt{viral\_load} & float [0--1] & Pathogen emission strength \\
+  \texttt{immunity} & float [0--1] & Susceptibility to infection \\
+  \texttt{vaccinated} & bool & Transmission and mortality reduction \\
+  \texttt{hygiene\_score} & float [0--1] & Hand washing, fomite reduction \\
+  \texttt{contact\_rate} & float & Interactions per day \\
+  \texttt{daily\_schedule} & list of POI & Sequence of nodes during the day \\
+  \bottomrule
+\end{tabularx}
+\label{tab:agent-attrs}
+\end{table}
+
+\subsection{Environment Architecture: Space and POI Nodes}
+\label{sec:environment}
+
+The simulation environment is organised as a heterogeneous graph
+$G = (V, E)$, where $V$ is the set of physical locations (Points of Interest,
+POI) and $E$ the simplified transit paths connecting them~\cite{eubank2004modelling}.
+Graph nodes are divided into semantic categories:
+
+\begin{itemize}
+  \item \textbf{Households} --- nocturnal and morning space,
+  \item \textbf{Workplaces and offices} --- daily destination nodes for adults,
+  \item \textbf{Educational facilities} --- schools and universities for
+        children and young adults,
+  \item \textbf{Commercial spaces} --- supermarkets and shops,
+  \item \textbf{Recreational venues} --- parks, restaurants,
+  \item \textbf{Healthcare facilities} --- clinics, hospitals.
+\end{itemize}
+
+Each POI node carries environmental attributes that affect aerosol dynamics:
+capacity, floor area, ventilation coefficient, and temperature. Poorly
+ventilated, densely occupied nodes (e.g.\ a classroom, a metro carriage)
+dramatically increase the aerosol transmission risk compared to open spaces.
+
+\subsection{Fomites: Passive Environmental Agents}
+\label{sec:fomites}
+
+A key element of the project is the modeling of indirect transmission via
+contaminated surfaces --- fomites~\cite{jones2009fomites}. Selected high-risk
+POI nodes (door handles, shared desks, handrails) contain objects of class
+\texttt{FomiteAgent} --- passive agents with their own state:
+
+\begin{itemize}
+  \item \textbf{Contamination level} --- current pathogen titre on the surface,
+  \item \textbf{Decay coefficient} ($\mu_F$) --- exponential decline of titre
+        with each simulation clock tick.
+\end{itemize}
+
+The virus exchange mechanics between agents and fomites are governed by a set
+of indirect transmission parameters (Table~\ref{tab:fomite-params}):
+
+\begin{table}[!htbp]
+\centering
+\caption{Fomite transmission parameters}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Symbol} & \textbf{Definition} & \textbf{Unit} \\ \midrule
+  $\alpha$ & Pathogen shedding rate of an infectious host & virus copies / h \\
+  $\phi$ & Fraction of shed load deposited on hands & [0--1] \\
+  $\rho_T$ & Hand-to-surface contact frequency & contacts / h \\
+  $\tau_{H \to F}$ & Transfer efficiency from hand to fomite & [0--1] \\
+  $\tau_{F \to H}$ & Transfer efficiency from fomite to hand & [0--1] \\
+  $\mu_H$ & Viral inactivation rate on hands & log decay / h \\
+  $\mu_F$ & Viral inactivation rate on surface & log decay / h \\
+  $\Theta_H$ & Hand-washing score (hygiene) & load reduction \\
+  \bottomrule
+\end{tabularx}
+\label{tab:fomite-params}
+\end{table}
+
+\subsection{Direct Transmission Mechanics: Aerosols and Droplets}
+\label{sec:aerosol}
+
+Direct transmission is modelled as a spatially propagating physical event.
+When an infectious agent sneezes or coughs, a spherical zone of elevated
+aerosol concentration is generated around them. The probability that a
+susceptible agent within this zone becomes infected is~\cite{nicas2004toward}:
+
+\begin{equation}
+  P_{\mathrm{inf}}(d, t) = 1 - \exp\!\left(
+    -\frac{V_L \cdot f(d) \cdot \Delta t}{D_{\min}}
+  \right)
+  \label{eq:aerosol}
+\end{equation}
+
+\noindent where $V_L$ is the emitter's viral load, $f(d)$ a geometric decay
+function with distance $d$ (gravitational settling of large droplets),
+$\Delta t$ the exposure time, and $D_{\min}$ the minimum infectious dose.
+The POI node's ventilation coefficient enters as an additional reduction factor
+for fine suspended aerosols.
+
+\subsection{Technology Stack}
+\label{sec:tech-stack}
+
+\subsubsection{Programming Language and Framework}
+\label{sec:mesa}
+
+The simulation is implemented in \textbf{Python} using the \textbf{Mesa}
+framework~\cite{mesa2020} --- the de-facto open-source standard for agent-based
+modeling in Python. Mesa provides:
+
+\begin{itemize}
+  \item a scheduling module (\texttt{RandomActivation}) --- random agent
+        ordering eliminates unrealistic deterministic patterns,
+  \item a spatial module (\texttt{MultiGrid}) --- grid allowing multiple agents
+        per cell,
+  \item \texttt{DataCollector} --- automated collection of macroscopic
+        variables (S, E, I, R, D) into pandas data structures,
+  \item the \texttt{mesa-geo} extension --- GIS / OpenStreetMap integration
+        for realistic urban topology.
+\end{itemize}
+
+\subsubsection{Supporting Libraries}
+\label{sec:libraries}
+
+\begin{itemize}
+  \item \textbf{NumPy} --- vectorised numerical operations (batch update of
+        viral titres across thousands of fomites per tick),
+  \item \textbf{pandas} --- results analysis and export,
+  \item \textbf{Matplotlib / Seaborn} --- epidemic curve visualisation,
+  \item \textbf{Streamlit} --- interactive dashboard for live parameter control
+        and results inspection,
+  \item \textbf{pytest} --- unit and integration tests verifying compartmental
+        mechanics.
+\end{itemize}
+
+\subsubsection{Project Structure}
+\label{sec:project-structure}
+
+The project follows the \emph{src layout} convention:
+
+\begin{lstlisting}[language=bash, caption={Planned project directory structure},
+  label=lst:structure]
+pandemic-simulation/
+|-- pyproject.toml          # dependencies, package metadata
+|-- README.md
+|-- configs/                # YAML files with pathogen parameters
+|   |-- pathogen_base.yaml
+|   `-- scenario_lockdown.yaml
+|-- data/
+|   |-- input/              # demographic pyramids, GIS graphs
+|   `-- output/             # DataCollector results (CSV, JSON)
+|-- src/
+|   `-- simulation/
+|       |-- __init__.py
+|       |-- agents.py       # HumanAgent, FomiteAgent
+|       |-- model.py        # EpidemicModel (Mesa core)
+|       |-- space.py        # POI graph, pathfinding
+|       `-- transmission.py # aerosol and fomite mechanics
+|-- tests/                  # pytest, unit tests
+`-- scripts/                # CLI: run simulations, batch runs
+\end{lstlisting}
+
+Separating pathogen parameters into external YAML configuration files from the
+core simulation logic allows switching the modelled virus (e.g.\ influenza
+vs.\ a SARS variant) without modifying the simulation code itself.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Stage 2: Implementation and Preliminary Verification}
+\label{sec:stage2}
+
+\emph{This section will be completed during Stage~2.}
+
+Stage~2 covers the full implementation of all mechanisms designed in Stage~1
+and preliminary verification of the model's correctness. Planned work:
+
+\begin{itemize}
+  \item full implementation of aerosol and fomite transmission mechanics as
+        per the equations in Sections~\ref{sec:aerosol} and~\ref{sec:fomites},
+  \item calibration of epidemiological parameters against historical data
+        (COVID-19, pandemic influenza),
+  \item unit and integration tests (pytest) verifying SEIRD transition
+        correctness,
+  \item sensitivity analysis of the model with respect to key parameters
+        ($\beta$, $\sigma$, $\mu_F$, $\Theta_H$),
+  \item architecture revisions informed by observations from preliminary
+        simulation runs.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Stage 3: Experimental Research and Final Project}
+\label{sec:stage3}
+
+\emph{This section will be completed during Stage~3.}
+
+Stage~3 is the main research phase of the project. Planned experimental
+scenarios:
+
+\begin{enumerate}
+  \item \textbf{Baseline scenario} --- pandemic without any intervention;
+        observation of natural SEIRD dynamics.
+  \item \textbf{Lockdown} --- closure of high-risk POI nodes (offices, shops)
+        while keeping schools and healthcare facilities active.
+  \item \textbf{Vaccination campaign} --- gradual rollout of a vaccine to
+        selected age groups; observation of the effect on the epidemic peak.
+  \item \textbf{Superspreaders} --- analysis of a scenario in which a small
+        number of agents with high \texttt{contact\_rate} and low
+        \texttt{hygiene\_score} account for a disproportionate number of
+        infections.
+  \item \textbf{Hand hygiene impact} --- comparison of populations with high
+        and low $\Theta_H$ values on the dynamics of fomite-mediated
+        transmission.
+\end{enumerate}
+
+Results for each scenario will be presented as epidemic curves (S, E, I, R, D
+over time), infection heat maps across POI nodes, and statistical analysis of
+secondary infection distributions.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{\SectionTitleSummary}
+\label{sec:conclusions}
+
+This document presents a comprehensive plan and incremental documentation of a
+multi-scale agent-based simulation of viral pandemic spread.
+
+The following key design decisions were made in Stage~1:
+
+\begin{itemize}
+  \item \textbf{SEIRD model} --- extension of the classical SIR model with an
+        incubation state and mortality; continuous viral load as a mechanism
+        linking within-host and between-host dynamics.
+  \item \textbf{Agent-based architecture in Mesa} --- framework guaranteeing
+        scalability, native data analysis support, and GIS integration.
+  \item \textbf{Three transmission mechanisms} --- aerosol/droplets
+        (distance-dependent direct transmission), fomites (indirect
+        transmission via contaminated surfaces), and touch.
+  \item \textbf{Heterogeneous POI space} --- multi-layered graph reflecting
+        the functional structure of an urban agglomeration.
+  \item \textbf{External parameter configuration} --- YAML files allow rapid
+        scenario switching without modifying the core simulation code.
+\end{itemize}
+
+Sections covering Stages~2 and~3 will be filled in upon completion of each
+respective project stage.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\printbibliography
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\end{document}
