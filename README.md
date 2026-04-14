@@ -1,6 +1,6 @@
 # Wieloskalowa agentowa symulacja rozprzestrzeniania się pandemii
 
-Projekt zaliczeniowy z przedmiotu Modelowanie i Symulacja, AGH Informatyka.  
+Projekt zaliczeniowy z przedmiotu Modelowanie i Symulacja Systemów, AGH Informatyka.  
 Celem jest stopniowa implementacja symulacji agentowej (ABM) pandemii wirusowej w środowisku miejskim.
 
 ## Stan projektu
