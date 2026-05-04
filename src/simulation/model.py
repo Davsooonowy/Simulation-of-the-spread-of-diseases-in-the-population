@@ -1,5 +1,11 @@
+from __future__ import annotations
+
 import mesa
+import yaml
+
 from .agents import HumanAgent, State
+from .space import CityGraph, POIType
+from .transmission import compute_node_transmission
 
 
 def _count(state: State):
@@ -8,56 +14,96 @@ def _count(state: State):
 
 class EpidemicModel(mesa.Model):
     """
-    SEIRD agent-based epidemic model on a MultiGrid.
+    SEIRD epidemic model on a POI graph.
+
+    Each step represents one day. Agents visit: household (always),
+    workplace/school (unless lockdown), and shop (30%, skipped when
+    social_distancing=True). Transmission is computed per-node.
 
     Parameters
     ----------
     n_agents : int
-        Total number of human agents.
-    width, height : int
-        Grid dimensions (torus topology).
-    p_inf : float
-        Probability that an Infectious agent infects a Susceptible
-        neighbour in one step.
     incubation_period : int
-        Steps (days) an agent spends in state E before becoming I.
+        Days in state E before becoming I.
     infectious_period : int
-        Steps (days) an agent spends in state I before recovering/dying.
+        Days in state I before recovering or dying.
     p_death : float
-        Probability of death at the end of the infectious period.
+        Base probability of death at end of infectious period.
     initial_infected_frac : float
-        Fraction of agents initialised as I (index cases).
+        Fraction of agents initialised as Infectious.
+    mask_coverage : float
+        Fraction of population wearing masks [0–1].
+    social_distancing_coverage : float
+        Fraction of population practising social distancing [0–1].
+    vaccination_coverage : float
+        Fraction of population vaccinated [0–1].
+    lockdown : bool
+        When True, agents skip their workplace/school node.
+    p_base_override : dict[POIType, float] | None
+        Override p_base for specific POI types.
+    p_base_multiplier : float
+        Scale all p_base values by this factor.
+    eta_m : float
+        Mask effectiveness coefficient (default 0.5 per report).
     """
 
     def __init__(
         self,
         n_agents: int = 500,
-        width: int = 50,
-        height: int = 50,
-        p_inf: float = 0.20,
         incubation_period: int = 4,
         infectious_period: int = 8,
         p_death: float = 0.02,
         initial_infected_frac: float = 0.05,
+        mask_coverage: float = 0.0,
+        social_distancing_coverage: float = 0.0,
+        vaccination_coverage: float = 0.0,
+        lockdown: bool = False,
+        p_base_override: dict[POIType, float] | None = None,
+        p_base_multiplier: float = 1.0,
+        eta_m: float = 0.5,
     ) -> None:
         super().__init__()
 
-        self.n_agents = n_agents
-        self.p_inf = p_inf
         self.incubation_period = incubation_period
         self.infectious_period = infectious_period
         self.p_death = p_death
+        self.lockdown = lockdown
+        self.eta_m = eta_m
 
-        self.grid = mesa.space.MultiGrid(width, height, torus=True)
+        self.city = CityGraph(n_agents, p_base_override, p_base_multiplier)
         self.schedule = mesa.time.RandomActivation(self)
+
+        n_households = len(self.city.households)
 
         for i in range(n_agents):
             state = State.I if self.random.random() < initial_infected_frac else State.S
-            agent = HumanAgent(i, self, state=state)
+            age = self.random.randint(0, 80)
+
+            household = self.city.households[i % n_households]
+
+            if age < 18:
+                workplace = self.random.choice(self.city.schools)
+            elif age <= 65:
+                workplace = self.random.choice(self.city.offices)
+            else:
+                workplace = None
+
+            vaccinated = self.random.random() < vaccination_coverage
+            immunity = 0.5 if vaccinated else 0.0
+
+            agent = HumanAgent(
+                unique_id=i,
+                model=self,
+                state=state,
+                age=age,
+                household_id=household.node_id,
+                workplace_id=workplace.node_id if workplace else None,
+                wears_mask=self.random.random() < mask_coverage,
+                social_distancing=self.random.random() < social_distancing_coverage,
+                vaccinated=vaccinated,
+                immunity=immunity,
+            )
             self.schedule.add(agent)
-            x = self.random.randrange(width)
-            y = self.random.randrange(height)
-            self.grid.place_agent(agent, (x, y))
 
         self.datacollector = mesa.DataCollector(
             model_reporters={
@@ -71,5 +117,47 @@ class EpidemicModel(mesa.Model):
         self.datacollector.collect(self)
 
     def step(self) -> None:
+        # 1. Clear previous day's POI assignments
+        self.city.clear_agents()
+
+        # 2. Update viral loads and assign agents to their daily POIs
+        for agent in self.schedule.agents:
+            if agent.state != State.D:
+                agent.update_viral_load()
+                agent.visit_poi()
+
+        # 3. Transmit within each POI node
+        for node in self.city.all_nodes():
+            compute_node_transmission(node, self.random, self.eta_m)
+
+        # 4. Progress disease states (calls agent.step() in random order)
         self.schedule.step()
+
         self.datacollector.collect(self)
+
+    @classmethod
+    def from_config(cls, config_path: str, **overrides) -> EpidemicModel:
+        """Create model from a YAML config file with optional parameter overrides."""
+        with open(config_path) as f:
+            config = yaml.safe_load(f)
+
+        pathogen = config.get("pathogen", {})
+        transmission = config.get("transmission", {})
+
+        p_base_yaml = transmission.get("p_base", {})
+        p_base_override: dict[POIType, float] = {
+            POIType[name.upper()]: float(val)
+            for name, val in p_base_yaml.items()
+        }
+
+        params: dict = {
+            "incubation_period": pathogen.get("incubation_period", 4),
+            "infectious_period": pathogen.get("infectious_period", 8),
+            "p_death": pathogen.get("p_death", 0.02),
+            "initial_infected_frac": pathogen.get("initial_infected_frac", 0.05),
+            "eta_m": transmission.get("eta_m", 0.5),
+            "lockdown": config.get("lockdown", False),
+            "p_base_override": p_base_override or None,
+        }
+        params.update(overrides)
+        return cls(**params)
