@@ -133,6 +133,10 @@ class EpidemicModel(mesa.Model):
         # 4. Progress disease states (calls agent.step() in random order)
         self.schedule.step()
 
+        # 5. Refresh viral loads to reflect post-progression state
+        for agent in self.schedule.agents:
+            agent.update_viral_load()
+
         self.datacollector.collect(self)
 
     @classmethod
