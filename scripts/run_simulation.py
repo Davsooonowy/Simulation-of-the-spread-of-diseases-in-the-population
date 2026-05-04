@@ -1,4 +1,4 @@
-"""Run a single SEIRD simulation and plot epidemic curves."""
+"""Run a single SEIRD simulation with POI graph and plot epidemic curves."""
 import sys
 import pathlib
 
@@ -10,13 +10,14 @@ from simulation.model import EpidemicModel
 STEPS = 100
 PARAMS = dict(
     n_agents=500,
-    width=50,
-    height=50,
-    p_inf=0.20,
     incubation_period=4,
     infectious_period=8,
     p_death=0.02,
     initial_infected_frac=0.05,
+    mask_coverage=0.0,
+    social_distancing_coverage=0.0,
+    vaccination_coverage=0.0,
+    lockdown=False,
 )
 
 COLORS = {
@@ -42,17 +43,25 @@ def main() -> None:
 
     ax.set_xlabel("Simulation step (day)")
     ax.set_ylabel("Number of agents")
-    ax.set_title("SEIRD Epidemic Simulation — Agent-Based Model (Mesa)")
+    ax.set_title("SEIRD Epidemic Simulation — POI Graph Model (Mesa, Etap 2)")
     ax.legend(fontsize=12)
     ax.grid(alpha=0.3)
     fig.tight_layout()
 
-    out_path = pathlib.Path(__file__).parent.parent / "data" / "output" / "epidemic_curve.png"
+    out_path = (
+        pathlib.Path(__file__).parent.parent / "data" / "output" / "epidemic_curve.png"
+    )
     plt.savefig(out_path, dpi=150)
     print(f"Plot saved to {out_path}")
 
     print("\nFinal state counts:")
     print(data.iloc[-1].to_string())
+
+    peak_i = data["I"].max()
+    attack_rate = (data["R"].iloc[-1] + data["D"].iloc[-1]) / PARAMS["n_agents"] * 100
+    print(f"\nPeak I:      {int(peak_i)}")
+    print(f"Attack rate: {attack_rate:.1f}%")
+
     plt.show()
 
 
