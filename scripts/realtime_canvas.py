@@ -15,8 +15,8 @@ DEFAULT_PARAMS = {
     "n_agents": 180,
     "initial_infected_frac": 0.04,
     "day_duration": 16,
-    "p_base_multiplier": 0.55,
-    "p_transit": 0.035,
+    "p_base_multiplier": 0.9,
+    "p_transit": 0.05,
     "mask_coverage": 0.0,
     "social_distancing_coverage": 0.0,
     "vaccination_coverage": 0.0,
@@ -289,7 +289,9 @@ function createAgents() {
   const n = PARAMS.n_agents;
   for (let i = 0; i < n; i++) {
     const age = Math.floor(rand(1, 88));
-    const state = Math.random() < PARAMS.initial_infected_frac ? "I" : "S";
+    const rng0 = Math.random();
+    const state = rng0 < PARAMS.initial_infected_frac * 0.6 ? "I" :
+                  rng0 < PARAMS.initial_infected_frac ? "E" : "S";
     const vaccinated = Math.random() < PARAMS.vaccination_coverage;
     const p = insidePoiPosition("HOUSEHOLD");
     const agent = {
@@ -308,11 +310,12 @@ function createAgents() {
       immunity: vaccinated ? 0.52 : 0,
       wearsMask: Math.random() < PARAMS.mask_coverage,
       socialDistancing: Math.random() < PARAMS.social_distancing_coverage,
-      infectedAt: state === "I" ? -PARAMS.incubation_period : null,
-      exposedAt: null,
-      viralLoad: state === "I" ? rand(0.35, 0.9) : 0,
+      infectedAt: state === "I" ? -(Math.random() * PARAMS.infectious_period * 0.7) : null,
+      exposedAt: state === "E" ? -(Math.random() * PARAMS.incubation_period * 0.85) : null,
+      viralLoad: state === "I" ? rand(0.3, 0.95) : 0,
       contactCooldown: 0,
       hospitalized: false,
+      infPeriodMult: rand(0.82, 1.22),
       currentPOI: "HOUSEHOLD",
       targetPOI: "HOUSEHOLD",
       route: [],
@@ -335,8 +338,8 @@ function infectiousness(agent) {
   }
   if (agent.state === "I") {
     const t = Math.max(0, day - agent.infectedAt);
-    const frac = t / PARAMS.infectious_period;
-    return Math.max(0.12, 1 - frac * 0.72);
+    const frac = t / (PARAMS.infectious_period * (agent.infPeriodMult || 1));
+    return Math.max(0.1, 1 - frac * 0.74);
   }
   return 0;
 }
@@ -348,7 +351,7 @@ function progressDisease(agent) {
     agent.viralLoad = 1;
     agent.route = plannedDay(agent);
     agent.routeIndex = 0;
-  } else if (agent.state === "I" && day - agent.infectedAt >= PARAMS.infectious_period) {
+  } else if (agent.state === "I" && day - agent.infectedAt >= PARAMS.infectious_period * (agent.infPeriodMult || 1)) {
     const deathRisk = PARAMS.p_death * (agent.group === "senior" ? 3.2 : agent.group === "adult" ? 1.0 : 0.25) * (agent.vaccinated ? 0.2 : 1);
     if (Math.random() < deathRisk) {
       agent.state = "D";
@@ -389,7 +392,7 @@ function moveAgent(agent, dtDays) {
     const dx = agent.tx - agent.x;
     const dy = agent.ty - agent.y;
     const dist = Math.hypot(dx, dy);
-    const speed = agent.socialDistancing ? 260 : 310;
+    const speed = agent.socialDistancing ? 950 : 1250;
     const step = speed * dtDays;
     if (dist <= step || dist < 1) {
       agent.x = agent.tx;
@@ -430,8 +433,8 @@ function exposeAgent(s, source) {
 }
 
 function resolveContactTransmission(dtDays) {
-  const active = agents.filter(a => a.alive && a.state !== "D");
-  const cellSize = 24;
+  const active = agents.filter(a => a.alive && a.state !== "D" && a.isMoving);
+  const cellSize = 28;
   const grid = new Map();
   for (const a of active) {
     const key = Math.floor(a.x / cellSize) + "," + Math.floor(a.y / cellSize);
@@ -442,7 +445,8 @@ function resolveContactTransmission(dtDays) {
     if (a.state !== "S" || a.contactCooldown > 0) continue;
     const cx = Math.floor(a.x / cellSize);
     const cy = Math.floor(a.y / cellSize);
-    for (let gx = cx - 1; gx <= cx + 1; gx++) {
+    let exposed = false;
+    outer: for (let gx = cx - 1; gx <= cx + 1; gx++) {
       for (let gy = cy - 1; gy <= cy + 1; gy++) {
         const list = grid.get(gx + "," + gy);
         if (!list) continue;
@@ -451,14 +455,12 @@ function resolveContactTransmission(dtDays) {
           const inf = infectiousness(b);
           if (inf <= 0) continue;
           const dist = Math.hypot(a.x - b.x, a.y - b.y);
-          const radius = (a.radius + b.radius) * (a.socialDistancing ? 2.2 : 2.8);
-          if (dist > radius) continue;
-          const samePlace = a.isMoving === b.isMoving && (a.isMoving || a.currentPOI === b.currentPOI);
-          const routeBonus = a.isMoving && b.isMoving ? 0.7 : 1.0;
-          const p = localRiskAt(a) * inf * routeBonus * dtDays * 0.95;
-          if (samePlace && Math.random() < p) {
+          if (dist > 38) continue;
+          const p = localRiskAt(a) * inf * dtDays * 5.0;
+          if (Math.random() < p) {
             exposeAgent(a, b);
-            return;
+            exposed = true;
+            break outer;
           }
         }
       }
@@ -469,13 +471,14 @@ function resolveContactTransmission(dtDays) {
 function ambientPoiTransmission(dtDays) {
   for (const poiName of Object.keys(POI)) {
     const present = agents.filter(a => a.alive && !a.isMoving && a.currentPOI === poiName);
-    const pressure = present.reduce((sum, a) => sum + infectiousness(a), 0);
-    if (pressure <= 0) continue;
+    const infectious = present.filter(a => infectiousness(a) > 0);
+    if (infectious.length === 0) continue;
+    const pressure = infectious.reduce((sum, a) => sum + infectiousness(a), 0);
     for (const s of present) {
       if (s.state !== "S" || s.contactCooldown > 0) continue;
-      const density = Math.min(2.5, present.length / 42);
-      const p = localRiskAt(s) * pressure * density * dtDays * 0.16;
-      if (Math.random() < p) exposeAgent(s, pick(present.filter(a => infectiousness(a) > 0)));
+      const density = Math.min(4.0, present.length / 22);
+      const p = localRiskAt(s) * pressure * density * dtDays * 0.46;
+      if (Math.random() < p) exposeAgent(s, pick(infectious));
     }
   }
 }
@@ -658,10 +661,10 @@ function tick(dtSeconds) {
   day += dtDays;
   const crossedDay = Math.floor(day) > Math.floor(day - dtDays);
   for (const agent of agents) {
-    if (crossedDay && agent.alive) {
+    if (crossedDay && agent.alive && !(agent.state === "I" && agent.hospitalized)) {
       agent.route = plannedDay(agent);
       agent.routeIndex = 0;
-      agent.dwellUntil = day + rand(0.02, 0.08);
+      agent.dwellUntil = day + rand(0.04, 0.55);
     }
     progressDisease(agent);
     moveAgent(agent, dtDays);
