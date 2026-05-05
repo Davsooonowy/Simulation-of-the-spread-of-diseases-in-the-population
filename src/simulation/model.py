@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import mesa
 import yaml
 
@@ -45,6 +47,8 @@ class EpidemicModel(mesa.Model):
         Scale all p_base values by this factor.
     eta_m : float
         Mask effectiveness coefficient (default 0.5 per report).
+    p_transit : float
+        Transmission probability on transit edges (default 0.05).
     """
 
     def __init__(
@@ -61,6 +65,7 @@ class EpidemicModel(mesa.Model):
         p_base_override: dict[POIType, float] | None = None,
         p_base_multiplier: float = 1.0,
         eta_m: float = 0.5,
+        p_transit: float = 0.05,
     ) -> None:
         super().__init__()
 
@@ -69,6 +74,8 @@ class EpidemicModel(mesa.Model):
         self.p_death = p_death
         self.lockdown = lockdown
         self.eta_m = eta_m
+        self.p_transit = p_transit
+        self.transit_log: dict[tuple[POIType, POIType], dict] = {}
 
         self.city = CityGraph(n_agents, p_base_override, p_base_multiplier)
         self.schedule = mesa.time.RandomActivation(self)
@@ -120,24 +127,59 @@ class EpidemicModel(mesa.Model):
         # 1. Clear previous day's POI assignments
         self.city.clear_agents()
 
-        # 2. Update viral loads and assign agents to their daily POIs
+        # 2. Update viral loads and plan destinations
+        agent_destinations: dict[int, list[int]] = {}
         for agent in self.schedule.agents:
             if agent.state != State.D:
                 agent.update_viral_load()
-                agent.visit_poi()
+                agent_destinations[agent.unique_id] = agent._plan_day()
 
-        # 3. Transmit within each POI node
+        # 3. Transmit during transit (before arriving at destinations)
+        self._run_transit(agent_destinations)
+
+        # 4. Place agents in their destination nodes
+        for agent in self.schedule.agents:
+            if agent.state != State.D:
+                for node_id in agent_destinations.get(agent.unique_id, []):
+                    self.city.get_node(node_id).agents.append(agent)
+
+        # 5. Transmit within each POI node
         for node in self.city.all_nodes():
             compute_node_transmission(node, self.random, self.eta_m)
 
-        # 4. Progress disease states (calls agent.step() in random order)
+        # 6. Progress disease states (calls agent.step() in random order)
         self.schedule.step()
 
-        # 5. Refresh viral loads to reflect post-progression state
+        # 7. Refresh viral loads to reflect post-progression state
         for agent in self.schedule.agents:
             agent.update_viral_load()
 
         self.datacollector.collect(self)
+
+    def _run_transit(self, agent_destinations: dict[int, list[int]]) -> None:
+        """Simulate transmission between agents sharing a transit edge."""
+        edge_agents: dict[tuple[POIType, POIType], list[HumanAgent]] = {}
+        for agent in self.schedule.agents:
+            if agent.state == State.D:
+                continue
+            dests = agent_destinations.get(agent.unique_id, [])
+            for dest_id in dests[1:]:
+                dest_type = self.city.get_node(dest_id).poi_type
+                key = (POIType.HOUSEHOLD, dest_type)
+                edge_agents.setdefault(key, []).append(agent)
+
+        self.transit_log = {
+            k: {"count": len(v), "infectious": sum(1 for a in v if a.state == State.I)}
+            for k, v in edge_agents.items()
+        }
+
+        if self.p_transit > 0.0:
+            for agents_on_edge in edge_agents.values():
+                if len(agents_on_edge) >= 2:
+                    transit_node = SimpleNamespace(
+                        p_base=self.p_transit, agents=agents_on_edge
+                    )
+                    compute_node_transmission(transit_node, self.random, self.eta_m)
 
     @classmethod
     def from_config(cls, config_path: str, **overrides) -> EpidemicModel:

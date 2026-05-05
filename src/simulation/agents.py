@@ -73,21 +73,15 @@ class HumanAgent(mesa.Agent):
         else:
             self.viral_load = 0.0
 
-    def visit_poi(self) -> None:
-        """Register presence in scheduled POI nodes for this day."""
-        city = self.model.city
-
-        # Household: always
-        city.get_node(self.household_id).agents.append(self)
-
-        # Workplace / school: mandatory unless global lockdown
+    def _plan_day(self) -> list[int]:
+        """Return list of node_ids to visit today (household always first)."""
+        destinations = [self.household_id]
         if self.workplace_id is not None and not self.model.lockdown:
-            city.get_node(self.workplace_id).agents.append(self)
-
-        # Shop: 30% chance, skipped when social distancing active
+            destinations.append(self.workplace_id)
         if not self.social_distancing and self.random.random() < 0.3:
-            shop = self.random.choice(city.shops)
-            shop.agents.append(self)
+            shop = self.random.choice(self.model.city.shops)
+            destinations.append(shop.node_id)
+        return destinations
 
     # ------------------------------------------------------------------
     # Mesa step — called by RandomActivation.step()
