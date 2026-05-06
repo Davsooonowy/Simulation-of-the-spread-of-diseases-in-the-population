@@ -259,9 +259,9 @@ for (const [k, v] of Object.entries(POI_BASE)) {
 function poiEffBase(poiName) {
   const base = POI[poiName].pBase;
   if (!getLockdown()) return base;
-  if (poiName === "OFFICE" || poiName === "SCHOOL") return 0;
-  if (poiName === "SHOP")  return base * 0.25;
-  if (poiName === "PARK")  return base * 0.55;
+  if (poiName === "OFFICE" || poiName === "SCHOOL" || poiName === "PARK") return 0;
+  if (poiName === "SHOP")       return base * 0.20;
+  if (poiName === "HEALTHCARE") return base * 0.35; // stricter hospital protocols
   return base;
 }
 
@@ -324,14 +324,17 @@ function plannedDay(agent) {
     // Shop — children don't go alone; lockdown restricts heavily
     const shopP = lockdown ? 0.04 : (effSD ? 0.10 : 0.28);
     if (agent.group !== "child" && Math.random() < shopP) route.push("SHOP");
-    // Park — seniors go more; lockdown restricts
-    const parkP = lockdown ? 0.05 : (agent.group === "senior" ? 0.30 : effSD ? 0.08 : 0.20);
+    // Park — completely blocked during lockdown
+    const parkP = lockdown ? 0.0 : (agent.group === "senior" ? 0.30 : effSD ? 0.08 : 0.20);
     if (agent.state !== "I" && Math.random() < parkP) route.push("PARK");
   }
 
   // Infectious agents: hospitalization decision
+  // During lockdown only seniors go to hospital (others isolate at home)
   if (agent.state === "I") {
-    const hospRisk = agent.group === "senior" ? 0.38 : agent.group === "adult" ? 0.18 : 0.07;
+    const hospRisk = lockdown
+      ? (agent.group === "senior" ? 0.40 : 0.0)
+      : (agent.group === "senior" ? 0.38 : agent.group === "adult" ? 0.18 : 0.07);
     agent.hospitalized = agent.hospitalized || (!agent.selfIsolating && Math.random() < hospRisk);
     if (agent.hospitalized) route.splice(1, route.length - 1, "HEALTHCARE");
   } else {
@@ -629,8 +632,8 @@ function drawRoutes() {
   const lk = getLockdown();
   for (const [a, b] of ROUTES) {
     const pa = POI[a], pb = POI[b];
-    const isWork = (b === "OFFICE" || b === "SCHOOL");
-    const alpha  = (lk && isWork) ? 0.05 : (a === "HOUSEHOLD" ? 0.32 : 0.15);
+    const isBlocked = lk && (b === "OFFICE" || b === "SCHOOL" || b === "PARK" || b === "HEALTHCARE");
+    const alpha  = isBlocked ? 0.04 : (a === "HOUSEHOLD" ? 0.32 : 0.15);
     ctx.strokeStyle = `rgba(70,112,145,${alpha})`;
     ctx.lineWidth   = a === "HOUSEHOLD" ? 7 : 3;
     ctx.lineCap     = "round";
@@ -644,7 +647,7 @@ function drawPoi() {
     const present = agents.filter(a => a.alive && !a.isMoving && a.currentPOI === name);
     const nI      = present.filter(a => a.state === "I").length;
     const nE      = present.filter(a => a.state === "E").length;
-    const closed  = lk && (name === "OFFICE" || name === "SCHOOL");
+    const closed  = lk && (name === "OFFICE" || name === "SCHOOL" || name === "PARK" || name === "HEALTHCARE");
 
     if (nI > 0 && !closed) {
       const glow = ctx.createRadialGradient(poi.x, poi.y, poi.r * 0.4, poi.x, poi.y, poi.r * 1.9);
