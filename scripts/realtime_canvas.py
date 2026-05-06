@@ -257,12 +257,48 @@ for (const [k, v] of Object.entries(POI_BASE)) {
 
 // Effective pBase — called every time, respects live lockdown
 function poiEffBase(poiName) {
+  if (poiName === "HOUSEHOLD") return 0;  // handled per-family below
   const base = POI[poiName].pBase;
   if (!getLockdown()) return base;
   if (poiName === "OFFICE" || poiName === "SCHOOL" || poiName === "PARK") return 0;
   if (poiName === "SHOP")       return base * 0.20;
-  if (poiName === "HEALTHCARE") return base * 0.35; // stricter hospital protocols
+  if (poiName === "HEALTHCARE") return base * 0.35;
   return base;
+}
+
+// ─── household clusters (one circle per family) ───────────────────────────────
+const FAMILY_SIZE  = 5;
+const HH_CX = 145, HH_CY = 345;       // neighbourhood center on canvas
+const HH_RADIUS    = 12;               // radius of each family circle
+// pBase for in-home transmission — highest (enclosed, prolonged contact)
+const HH_P_BASE    = 0.35 * PARAMS.p_base_multiplier;
+
+let households = [];   // filled by createAgents()
+
+function buildHouseholds(n) {
+  const nHH  = Math.ceil(n / FAMILY_SIZE);
+  const cols = Math.ceil(Math.sqrt(nHH * 1.4));  // slightly wider than tall
+  const sp   = 26;                               // spacing between circles
+  const offX = -((cols - 1) * sp) / 2;
+  const rows = Math.ceil(nHH / cols);
+  const offY = -((rows - 1) * sp) / 2;
+  const hh   = [];
+  for (let i = 0; i < nHH; i++) {
+    const col = i % cols, row = Math.floor(i / cols);
+    hh.push({
+      id: i,
+      x: HH_CX + offX + col * sp + rand(-2, 2),
+      y: HH_CY + offY + row * sp + rand(-2, 2),
+    });
+  }
+  return hh;
+}
+
+function insideHousehold(agent) {
+  const hh = households[agent.householdId];
+  const th = rand(0, Math.PI * 2);
+  const r  = HH_RADIUS * Math.sqrt(Math.random()) * 0.82;
+  return { x: hh.x + Math.cos(th) * r, y: hh.y + Math.sin(th) * r };
 }
 
 const ROUTES = [
@@ -345,13 +381,17 @@ function plannedDay(agent) {
   return route;
 }
 
+function poiPosition(agent, poiName) {
+  return poiName === "HOUSEHOLD" ? insideHousehold(agent) : insidePOI(poiName);
+}
+
 function setRoute(agent, route) {
   agent.route = route;
   agent.routeIndex = 0;
   agent.currentPOI = route[0];
   agent.targetPOI  = route[0];
   agent.dwellUntil = day + 0.05;
-  const p = insidePOI(route[0]);
+  const p = poiPosition(agent, route[0]);
   agent.x = p.x; agent.y = p.y;
   agent.tx = p.x; agent.ty = p.y;
   agent.isMoving = false;
@@ -366,6 +406,8 @@ function createAgents() {
   nextHistoryDay = 0;
 
   const n = PARAMS.n_agents;
+  households = buildHouseholds(n);
+
   for (let i = 0; i < n; i++) {
     const age = Math.floor(rand(1, 88));
     const r0  = Math.random();
@@ -373,7 +415,10 @@ function createAgents() {
                   r0 < PARAMS.initial_infected_frac       ? "E" : "S";
     const vaccinated = Math.random() < PARAMS.vaccination_coverage;
 
-    const p = insidePOI("HOUSEHOLD");
+    const householdId = i % households.length;
+    // Temporarily stub so insideHousehold works before agent is fully built
+    const tmpAgent = { householdId };
+    const p = insideHousehold(tmpAgent);
     const agent = {
       id: i,
       x: p.x, y: p.y, tx: p.x, ty: p.y,
@@ -394,6 +439,7 @@ function createAgents() {
       selfIsolating: false,
       asymptomatic:  false,
       infPeriodMult: rand(0.82, 1.22),
+      householdId,
       currentPOI: "HOUSEHOLD",
       targetPOI:  "HOUSEHOLD",
       route: [], routeIndex: 0,
@@ -466,7 +512,7 @@ function advanceRoute(agent) {
       return;
     }
     agent.targetPOI = agent.route[agent.routeIndex];
-    const p = insidePOI(agent.targetPOI);
+    const p = poiPosition(agent, agent.targetPOI);
     agent.tx = p.x; agent.ty = p.y;
     agent.isMoving = true;
   }
@@ -503,9 +549,16 @@ function moveAgent(agent, dtDays) {
 // ─── transmission ─────────────────────────────────────────────────────────────
 // localRiskAt reads LIVE mask & SD coverage every call
 function localRiskAt(agent) {
-  const base   = agent.isMoving ? PARAMS.p_transit : poiEffBase(agent.currentPOI);
-  const maskR  = getMaskCov() * 0.46;   // weighted population mask reduction
-  const sdR    = getSDCov()   * 0.30;   // weighted SD reduction
+  let base;
+  if (agent.isMoving) {
+    base = PARAMS.p_transit;
+  } else if (agent.currentPOI === "HOUSEHOLD") {
+    base = HH_P_BASE;  // per-family pBase — higher than public places
+  } else {
+    base = poiEffBase(agent.currentPOI);
+  }
+  const maskR = getMaskCov() * 0.46;
+  const sdR   = getSDCov()   * 0.30;
   let p = base * (1 - maskR) * (1 - sdR);
   if (agent.vaccinated) p *= 0.28;
   return p * (1 - agent.immunity);
@@ -555,7 +608,9 @@ function resolveContactTransmission(dtDays) {
 
 // Ambient transmission for agents co-dwelling at the same POI
 function ambientPoiTransmission(dtDays) {
+  // ── Public POIs: all present agents can interact ──────────────────────────
   for (const poiName of Object.keys(POI)) {
+    if (poiName === "HOUSEHOLD") continue;   // handled per-family below
     const present    = agents.filter(a => a.alive && !a.isMoving && a.currentPOI === poiName);
     const infectious = present.filter(a => infectiousness(a) > 0);
     if (!infectious.length) continue;
@@ -564,6 +619,25 @@ function ambientPoiTransmission(dtDays) {
       if (s.state !== "S" || s.contactCooldown > 0) continue;
       const density = Math.min(4.0, present.length / 22);
       const p = localRiskAt(s) * pressure * density * dtDays * 0.48;
+      if (Math.random() < p) exposeAgent(s, pick(infectious));
+    }
+  }
+
+  // ── Household: transmission only within the same family ──────────────────
+  const byHH = new Map();
+  for (const a of agents) {
+    if (!a.alive || a.isMoving || a.currentPOI !== "HOUSEHOLD") continue;
+    if (!byHH.has(a.householdId)) byHH.set(a.householdId, []);
+    byHH.get(a.householdId).push(a);
+  }
+  for (const present of byHH.values()) {
+    const infectious = present.filter(a => infectiousness(a) > 0);
+    if (!infectious.length) continue;
+    const pressure = infectious.reduce((s, a) => s + infectiousness(a), 0);
+    for (const s of present) {
+      if (s.state !== "S" || s.contactCooldown > 0) continue;
+      // Small closed group → no density scaling needed, just pressure × base risk
+      const p = localRiskAt(s) * pressure * dtDays * 0.60;
       if (Math.random() < p) exposeAgent(s, pick(infectious));
     }
   }
@@ -643,7 +717,49 @@ function drawRoutes() {
 
 function drawPoi() {
   const lk = getLockdown();
+
+  // ── Household neighbourhood: one small circle per family ─────────────────
+  // Neighbourhood background halo
+  ctx.fillStyle = "rgba(10,22,30,0.55)";
+  ctx.beginPath(); ctx.arc(HH_CX, HH_CY, 88, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = "#1a3040"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(HH_CX, HH_CY, 88, 0, Math.PI*2); ctx.stroke();
+
+  for (const hh of households) {
+    const hhAgents = agents.filter(a => a.alive && !a.isMoving &&
+                                        a.currentPOI === "HOUSEHOLD" &&
+                                        a.householdId === hh.id);
+    const hasI = hhAgents.some(a => a.state === "I");
+    const hasE = hhAgents.some(a => a.state === "E");
+    if (hasI) {
+      const glow = ctx.createRadialGradient(hh.x, hh.y, 0, hh.x, hh.y, HH_RADIUS * 2.5);
+      glow.addColorStop(0, "rgba(239,71,111,.22)");
+      glow.addColorStop(1, "rgba(239,71,111,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(hh.x, hh.y, HH_RADIUS * 2.5, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle   = hhAgents.length ? "#0d1820" : "#080f14";
+    ctx.strokeStyle = hasI ? "#ef476f" : (hasE ? "#f6b352" : "#2a4456");
+    ctx.lineWidth   = hasI ? 1.8 : (hhAgents.length ? 0.9 : 0.4);
+    ctx.beginPath(); ctx.arc(hh.x, hh.y, HH_RADIUS, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+  }
+  // Neighbourhood label
+  ctx.fillStyle = "#e6edf3"; ctx.font = "700 14px ui-monospace,monospace";
+  ctx.textAlign = "center";
+  ctx.fillText("Domy", HH_CX, HH_CY - 94);
+  // Summary counts for the neighbourhood
+  const hhAll = agents.filter(a => a.alive && !a.isMoving && a.currentPOI === "HOUSEHOLD");
+  const hhI = hhAll.filter(a => a.state === "I").length;
+  const hhE = hhAll.filter(a => a.state === "E").length;
+  if (hhAll.length) {
+    ctx.fillStyle = hhI > 0 ? "#ffb3c1" : "#6a8a9a";
+    ctx.font = "10px ui-monospace,monospace";
+    ctx.fillText(`I:${hhI} E:${hhE} N:${hhAll.length}`, HH_CX, HH_CY + 96);
+  }
+
+  // ── Public POIs ───────────────────────────────────────────────────────────
   for (const [name, poi] of Object.entries(POI)) {
+    if (name === "HOUSEHOLD") continue;
     const present = agents.filter(a => a.alive && !a.isMoving && a.currentPOI === name);
     const nI      = present.filter(a => a.state === "I").length;
     const nE      = present.filter(a => a.state === "E").length;
@@ -656,22 +772,20 @@ function drawPoi() {
       ctx.fillStyle = glow;
       ctx.beginPath(); ctx.arc(poi.x, poi.y, poi.r * 1.9, 0, Math.PI*2); ctx.fill();
     }
-
     ctx.fillStyle   = closed ? "#060e14" : "#0d1820";
     ctx.strokeStyle = closed ? "#1a2a38" : (nI > 0 ? "#ef476f" : "#315067");
     ctx.lineWidth   = nI > 0 ? 2.2 : 1.3;
-    if (closed) { ctx.setLineDash([4, 4]); }
+    if (closed) ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.arc(poi.x, poi.y, poi.r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
     ctx.setLineDash([]);
 
     ctx.fillStyle = closed ? "#3a5060" : "#e6edf3";
-    ctx.font = "700 14px ui-monospace, monospace";
+    ctx.font = "700 14px ui-monospace,monospace";
     ctx.textAlign = "center";
     ctx.fillText(closed ? poi.label + " [X]" : poi.label, poi.x, poi.y - poi.r - 10);
-
     if (present.length) {
       ctx.fillStyle = nI > 0 ? "#ffb3c1" : "#6a8a9a";
-      ctx.font = "10px ui-monospace, monospace";
+      ctx.font = "10px ui-monospace,monospace";
       ctx.fillText(`I:${nI} E:${nE} N:${present.length}`, poi.x, poi.y + poi.r + 16);
     }
   }
