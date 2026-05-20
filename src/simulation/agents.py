@@ -76,11 +76,23 @@ class HumanAgent(mesa.Agent):
     def _plan_day(self) -> list[int]:
         """Return list of node_ids to visit today (household always first)."""
         destinations = [self.household_id]
+
+        # Work / school — blocked by lockdown
         if self.workplace_id is not None and not self.model.lockdown:
             destinations.append(self.workplace_id)
-        if not self.social_distancing and self.random.random() < 0.3:
-            shop = self.random.choice(self.model.city.shops)
-            destinations.append(shop.node_id)
+
+        # Shop — blocked during lockdown; contact_rate scales visit probability
+        if not self.model.lockdown and not self.social_distancing:
+            shop_prob = min(1.0, 0.30 * self.contact_rate)
+            if self.random.random() < shop_prob:
+                destinations.append(self.random.choice(self.model.city.shops).node_id)
+
+        # Park — blocked during lockdown; reduced by social distancing
+        if not self.model.lockdown:
+            park_prob = min(1.0, (0.08 if self.social_distancing else 0.18) * self.contact_rate)
+            if self.random.random() < park_prob:
+                destinations.append(self.random.choice(self.model.city.parks).node_id)
+
         return destinations
 
     # ------------------------------------------------------------------

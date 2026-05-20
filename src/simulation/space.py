@@ -50,13 +50,21 @@ class CityGraph:
         if p_base_override:
             p_base.update(p_base_override)
 
-        n_households = max(1, n_agents // 4)
-        self.households = self._add_nodes(POIType.HOUSEHOLD, n_households, p_base)
-        self.schools = self._add_nodes(POIType.SCHOOL, 2, p_base)
-        self.offices = self._add_nodes(POIType.OFFICE, 3, p_base)
-        self.shops = self._add_nodes(POIType.SHOP, 2, p_base)
-        self.parks = self._add_nodes(POIType.PARK, 1, p_base)
-        self.healthcares = self._add_nodes(POIType.HEALTHCARE, 1, p_base)
+        # Scale node counts with population to keep realistic occupancy per node.
+        # Target: ~4 agents/household, ~25/office, ~30/school, ~50/shop catchment.
+        n_households  = max(1,  n_agents // 4)
+        n_schools     = max(2,  n_agents // 30)
+        n_offices     = max(3,  n_agents // 25)
+        n_shops       = max(2,  n_agents // 50)
+        n_parks       = max(1,  n_agents // 100)
+        n_healthcares = max(1,  n_agents // 200)
+
+        self.households  = self._add_nodes(POIType.HOUSEHOLD,  n_households,  p_base)
+        self.schools     = self._add_nodes(POIType.SCHOOL,     n_schools,     p_base)
+        self.offices     = self._add_nodes(POIType.OFFICE,     n_offices,     p_base)
+        self.shops       = self._add_nodes(POIType.SHOP,       n_shops,       p_base)
+        self.parks       = self._add_nodes(POIType.PARK,       n_parks,       p_base)
+        self.healthcares = self._add_nodes(POIType.HEALTHCARE, n_healthcares, p_base)
 
     def _add_nodes(
         self, poi_type: POIType, count: int, p_base: dict[POIType, float]

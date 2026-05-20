@@ -17,6 +17,7 @@ def make_agent(
     wears_mask: bool = False,
     social_distancing: bool = False,
     immunity: float = 0.0,
+    hygiene_score: float = 0.5,
 ):
     agent = MagicMock()
     agent.state = state
@@ -24,6 +25,7 @@ def make_agent(
     agent.wears_mask = wears_mask
     agent.social_distancing = social_distancing
     agent.immunity = immunity
+    agent.hygiene_score = hygiene_score
     return agent
 
 

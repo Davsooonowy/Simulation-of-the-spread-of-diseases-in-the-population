@@ -49,6 +49,11 @@ class EpidemicModel(mesa.Model):
         Mask effectiveness coefficient (default 0.5 per report).
     p_transit : float
         Transmission probability on transit edges (default 0.05).
+    mean_hygiene : float
+        Population mean hygiene_score [0–1]; 0.5 = neutral. Higher → less transmission.
+    superspreader_fraction : float
+        Fraction of agents initialised as superspreaders (contact_rate=3.0,
+        hygiene_score=0.1).
     """
 
     def __init__(
@@ -66,6 +71,8 @@ class EpidemicModel(mesa.Model):
         p_base_multiplier: float = 1.0,
         eta_m: float = 0.5,
         p_transit: float = 0.05,
+        mean_hygiene: float = 0.5,
+        superspreader_fraction: float = 0.0,
     ) -> None:
         super().__init__()
 
@@ -98,6 +105,16 @@ class EpidemicModel(mesa.Model):
             vaccinated = self.random.random() < vaccination_coverage
             immunity = 0.5 if vaccinated else 0.0
 
+            # Superspreader: high contact_rate, poor hygiene
+            is_superspreader = self.random.random() < superspreader_fraction
+            if is_superspreader:
+                hygiene = 0.1
+                contact_rate = 3.0
+            else:
+                raw = self.random.gauss(mean_hygiene, 0.15)
+                hygiene = max(0.0, min(1.0, raw))
+                contact_rate = 1.0
+
             agent = HumanAgent(
                 unique_id=i,
                 model=self,
@@ -109,6 +126,8 @@ class EpidemicModel(mesa.Model):
                 social_distancing=self.random.random() < social_distancing_coverage,
                 vaccinated=vaccinated,
                 immunity=immunity,
+                hygiene_score=hygiene,
+                contact_rate=contact_rate,
             )
             self.schedule.add(agent)
 
@@ -157,27 +176,33 @@ class EpidemicModel(mesa.Model):
         self.datacollector.collect(self)
 
     def _run_transit(self, agent_destinations: dict[int, list[int]]) -> None:
-        """Simulate transmission between agents sharing a transit edge."""
-        edge_agents: dict[tuple[POIType, POIType], list[HumanAgent]] = {}
+        """Simulate transmission between agents sharing the same transit route.
+
+        Only agents travelling to the *exact same destination node* are grouped
+        together; this prevents the earlier bug where all commuters of the same
+        POI type (e.g. all 300 office workers) were placed in one mega-bus.
+        """
+        # key: (origin_type, destination_node_id) → agents on that route
+        route_agents: dict[tuple[POIType, int], list[HumanAgent]] = {}
         for agent in self.schedule.agents:
             if agent.state == State.D:
                 continue
             dests = agent_destinations.get(agent.unique_id, [])
-            for dest_id in dests[1:]:
+            for dest_id in dests[1:]:          # skip household (first element)
                 dest_type = self.city.get_node(dest_id).poi_type
-                key = (POIType.HOUSEHOLD, dest_type)
-                edge_agents.setdefault(key, []).append(agent)
+                key = (dest_type, dest_id)
+                route_agents.setdefault(key, []).append(agent)
 
         self.transit_log = {
             k: {"count": len(v), "infectious": sum(1 for a in v if a.state == State.I)}
-            for k, v in edge_agents.items()
+            for k, v in route_agents.items()
         }
 
         if self.p_transit > 0.0:
-            for agents_on_edge in edge_agents.values():
-                if len(agents_on_edge) >= 2:
+            for agents_on_route in route_agents.values():
+                if len(agents_on_route) >= 2:
                     transit_node = SimpleNamespace(
-                        p_base=self.p_transit, agents=agents_on_edge
+                        p_base=self.p_transit, agents=agents_on_route
                     )
                     compute_node_transmission(transit_node, self.random, self.eta_m)
 

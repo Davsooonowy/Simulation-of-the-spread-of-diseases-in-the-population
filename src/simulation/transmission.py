@@ -7,6 +7,11 @@ if TYPE_CHECKING:
 
 ETA_M: float = 0.5
 
+# Each susceptible agent has close contact with at most this many infectious
+# agents per location per step. Prevents runaway transmission in large nodes
+# (e.g. 90 agents sharing one office) while preserving pair-wise calibration.
+MAX_INFECTIOUS_CONTACTS: int = 5
+
 
 def compute_p_eff(
     p_base: float,
@@ -29,9 +34,15 @@ def compute_p_eff(
 def compute_node_transmission(node: POINode, rng, eta_m: float = ETA_M) -> None:
     """Apply one-step within-node transmission for all S–I pairs.
 
-    Survival probability product across infectious agents:
-        survival = prod( (1 - p_eff_i)^viral_load_i  for i in infectious )
+    Each susceptible contacts at most MAX_INFECTIOUS_CONTACTS infectious agents
+    (sampled uniformly), preventing super-spreading artefacts from large nodes.
+
+    Survival probability across sampled contacts:
+        survival = prod( (1 - p_eff_i)^viral_load_i  for i in sampled )
         P_inf    = (1 - survival) * (1 - immunity)
+
+    Hygiene reduces transmission: avg_hygiene=0.5 → factor 1.0 (neutral);
+    avg_hygiene=1.0 → −30%; avg_hygiene=0.0 → +30%.
     """
     from .agents import State
 
@@ -42,15 +53,27 @@ def compute_node_transmission(node: POINode, rng, eta_m: float = ETA_M) -> None:
         return
 
     for s_agent in susceptible:
+        s_hygiene: float = getattr(s_agent, "hygiene_score", 0.5)
+
+        # Limit close contacts to avoid artefactual super-spreading in large nodes
+        n_contacts = min(len(infectious), MAX_INFECTIOUS_CONTACTS)
+        if len(infectious) > MAX_INFECTIOUS_CONTACTS:
+            contacts = rng.sample(infectious, n_contacts)
+        else:
+            contacts = infectious
+
         survival_prob = 1.0
-        for i_agent in infectious:
+        for i_agent in contacts:
+            i_hygiene: float = getattr(i_agent, "hygiene_score", 0.5)
+            avg_hygiene = (s_hygiene + i_hygiene) / 2.0
+            hygiene_factor = 1.0 - 0.6 * (avg_hygiene - 0.5)  # ±30% effect
             p_eff = compute_p_eff(
                 node.p_base,
                 s_agent.wears_mask,
                 i_agent.wears_mask,
                 s_agent.social_distancing,
                 eta_m,
-            )
+            ) * hygiene_factor
             p_contact = 1.0 - (1.0 - p_eff) ** i_agent.viral_load
             survival_prob *= 1.0 - p_contact
 

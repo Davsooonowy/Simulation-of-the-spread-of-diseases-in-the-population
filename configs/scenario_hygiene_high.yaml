@@ -1,0 +1,18 @@
+pathogen:
+  incubation_period: 4
+  infectious_period: 8
+  p_death: 0.02
+  initial_infected_frac: 0.05
+
+transmission:
+  eta_m: 0.5
+  p_base:
+    household: 0.35
+    school: 0.30
+    office: 0.20
+    shop: 0.10
+    park: 0.03
+    healthcare: 0.15
+
+mean_hygiene: 0.85
+lockdown: false
