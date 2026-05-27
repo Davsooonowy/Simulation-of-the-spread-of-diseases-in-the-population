@@ -1,48 +1,60 @@
 Stage 3 Summary Statistics
 N=500, steps=180, runs=7
+Reactive lockdown threshold: I >= 25 agents
+Average lockdown trigger day: 12.7
 
 Scenariusz bazowy (brak interwencji)
-  peak_I_mean: 88.14
-  peak_I_std: 8.82
-  attack_rate: 75.09
-  attack_std: 1.71
-  total_deaths: 7.43
-  deaths_std: 2.44
-  peak_day: 30.86
+  peak_I_mean: 92.29
+  peak_I_std: 8.46
+  attack_rate: 77.74
+  attack_std: 1.81
+  total_deaths: 8.43
+  deaths_std: 3.54
+  peak_day: 32.29
 
-Lockdown (zamknięte biura i szkoły)
-  peak_I_mean: 14.43
-  peak_I_std: 2.97
-  attack_rate: 3.51
-  attack_std: 0.89
-  total_deaths: 0.86
-  deaths_std: 0.99
-  peak_day: 7.57
+Lockdown natychmiastowy (od dnia 0)
+  peak_I_mean: 15.14
+  peak_I_std: 3.44
+  attack_rate: 4.03
+  attack_std: 1.20
+  total_deaths: 0.43
+  deaths_std: 0.73
+  peak_day: 7.14
+
+Lockdown reaktywny (gdy I ≥ 25 ag.)
+  peak_I_mean: 36.00
+  peak_I_std: 3.63
+  attack_rate: 14.23
+  attack_std: 2.52
+  total_deaths: 1.14
+  deaths_std: 1.46
+  peak_day: 17.14
+  avg_lockdown_day: 12.7
 
 Kampania szczepień (60% populacji)
-  peak_I_mean: 40.14
-  peak_I_std: 14.58
-  attack_rate: 49.06
-  attack_std: 7.58
-  total_deaths: 3.29
-  deaths_std: 1.83
-  peak_day: 42.14
+  peak_I_mean: 36.57
+  peak_I_std: 13.14
+  attack_rate: 42.46
+  attack_std: 16.10
+  total_deaths: 2.14
+  deaths_std: 1.46
+  peak_day: 30.00
 
 Superspreaderzy (5% populacji)
-  peak_I_mean: 100.29
-  peak_I_std: 10.57
-  attack_rate: 78.74
-  attack_std: 3.97
-  total_deaths: 6.86
-  deaths_std: 2.75
-  peak_day: 31.00
+  peak_I_mean: 94.86
+  peak_I_std: 14.20
+  attack_rate: 78.20
+  attack_std: 4.09
+  total_deaths: 7.57
+  deaths_std: 1.92
+  peak_day: 34.57
 
 Wysoka higiena rąk (mean=0.85)
-  peak_I_mean: 57.14
-  peak_I_std: 12.44
-  attack_rate: 60.77
-  attack_std: 4.45
-  total_deaths: 4.71
-  deaths_std: 2.19
-  peak_day: 42.14
+  peak_I_mean: 64.86
+  peak_I_std: 10.76
+  attack_rate: 65.54
+  attack_std: 6.59
+  total_deaths: 6.71
+  deaths_std: 2.60
+  peak_day: 34.29
 

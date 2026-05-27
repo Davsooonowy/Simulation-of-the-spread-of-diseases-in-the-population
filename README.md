@@ -20,11 +20,12 @@ Model integruje kompartmentową mechanikę SEIRD z realistyczną topologią miej
 
 | Scenariusz | Attack rate | Peak I | Zgony | vs. baseline |
 |---|---|---|---|---|
-| Bazowy (brak interwencji) | 75,1% | 88 | 7 | — |
-| **Lockdown** | **3,5%** | **14** | **1** | **−96% AR** |
-| Szczepienia 60% | 49,1% | 40 | 3 | −35% AR, −55% zgonów |
-| Superspreaderzy 5% | 78,7% | 100 | 7 | +4 p.p. AR |
-| Wysoka higiena (Θ = 0,85) | 60,8% | 57 | 5 | −14% AR, szczyt +11 dni |
+| Bazowy (brak interwencji) | 77,7% | 92 | 8 | — |
+| **Lockdown natychmiastowy (d. 0)** | **4,0%** | **15** | **<1** | **−95% AR** |
+| Lockdown reaktywny (d. ≈13) | 14,2% | 36 | 1 | −82% AR; ×3,5 vs natychmiastowy |
+| Szczepienia 60% | 42,5% | 37 | 2 | −45% AR, −75% zgonów |
+| Superspreaderzy 5% | 78,2% | 95 | 8 | +0,5 p.p. AR, wcześniejszy szczyt |
+| Wysoka higiena (Θ = 0,85) | 65,5% | 65 | 7 | −12% AR |
 
 ---
 
@@ -161,7 +162,7 @@ uv run streamlit run scripts/realtime_canvas.py
 ### Eksperymenty Stage 3
 
 ```bash
-# Uruchomienie wszystkich 5 scenariuszy (7 powtórzeń × 180 kroków)
+# Uruchomienie wszystkich 6 scenariuszy (7 powtórzeń × 180 kroków)
 uv run python scripts/experiment_stage3.py
 
 # Wyniki zapisywane do:
