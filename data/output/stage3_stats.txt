@@ -1,60 +1,70 @@
 Stage 3 Summary Statistics
-N=500, steps=180, runs=7
+N=500, steps=180, runs=7, base_seed=12345
+Empirical R0 (baseline, early phase): 1.826
 Reactive lockdown threshold: I >= 25 agents
-Average lockdown trigger day: 12.7
+Average lockdown trigger day: 8.9
 
 Scenariusz bazowy (brak interwencji)
-  peak_I_mean: 92.29
-  peak_I_std: 8.46
-  attack_rate: 77.74
-  attack_std: 1.81
-  total_deaths: 8.43
-  deaths_std: 3.54
-  peak_day: 32.29
+  peak_I_mean: 91.14
+  peak_I_std: 6.92
+  attack_rate: 79.71
+  attack_std: 2.31
+  total_deaths: 7.43
+  deaths_std: 1.92
+  peak_day: 34.00
 
 Lockdown natychmiastowy (od dnia 0)
-  peak_I_mean: 15.14
-  peak_I_std: 3.44
-  attack_rate: 4.03
-  attack_std: 1.20
-  total_deaths: 0.43
-  deaths_std: 0.73
-  peak_day: 7.14
+  peak_I_mean: 14.43
+  peak_I_std: 6.72
+  attack_rate: 3.51
+  attack_std: 1.57
+  total_deaths: 0.14
+  deaths_std: 0.35
+  peak_day: 7.71
 
 Lockdown reaktywny (gdy I ≥ 25 ag.)
-  peak_I_mean: 36.00
-  peak_I_std: 3.63
-  attack_rate: 14.23
-  attack_std: 2.52
-  total_deaths: 1.14
-  deaths_std: 1.46
-  peak_day: 17.14
-  avg_lockdown_day: 12.7
+  peak_I_mean: 37.86
+  peak_I_std: 2.36
+  attack_rate: 13.17
+  attack_std: 1.48
+  total_deaths: 1.57
+  deaths_std: 1.05
+  peak_day: 12.71
+  avg_lockdown_day: 8.9
 
 Kampania szczepień (60% populacji)
-  peak_I_mean: 36.57
-  peak_I_std: 13.14
-  attack_rate: 42.46
-  attack_std: 16.10
-  total_deaths: 2.14
-  deaths_std: 1.46
-  peak_day: 30.00
+  peak_I_mean: 49.14
+  peak_I_std: 12.48
+  attack_rate: 52.57
+  attack_std: 9.06
+  total_deaths: 3.57
+  deaths_std: 1.59
+  peak_day: 31.00
 
 Superspreaderzy (5% populacji)
-  peak_I_mean: 94.86
-  peak_I_std: 14.20
-  attack_rate: 78.20
-  attack_std: 4.09
-  total_deaths: 7.57
-  deaths_std: 1.92
-  peak_day: 34.57
+  peak_I_mean: 100.00
+  peak_I_std: 15.79
+  attack_rate: 79.34
+  attack_std: 1.76
+  total_deaths: 9.29
+  deaths_std: 1.58
+  peak_day: 35.00
 
 Wysoka higiena rąk (mean=0.85)
-  peak_I_mean: 64.86
-  peak_I_std: 10.76
-  attack_rate: 65.54
-  attack_std: 6.59
+  peak_I_mean: 63.14
+  peak_I_std: 13.94
+  attack_rate: 61.74
+  attack_std: 4.13
   total_deaths: 6.71
-  deaths_std: 2.60
-  peak_day: 34.29
+  deaths_std: 2.12
+  peak_day: 42.86
+
+Interwencje łączone (maski+higiena+szczep.)
+  peak_I_mean: 15.71
+  peak_I_std: 2.91
+  attack_rate: 11.71
+  attack_std: 4.53
+  total_deaths: 0.86
+  deaths_std: 0.64
+  peak_day: 11.00
 

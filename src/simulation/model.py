@@ -73,8 +73,15 @@ class EpidemicModel(mesa.Model):
         p_transit: float = 0.05,
         mean_hygiene: float = 0.5,
         superspreader_fraction: float = 0.0,
+        seed: int | None = None,
     ) -> None:
         super().__init__()
+
+        # Seed the model RNG *before* any agent is created so that the entire
+        # construction (initial infections, ages, behavioural attributes) and the
+        # subsequent simulation are fully reproducible for a given seed.
+        if seed is not None:
+            self.random.seed(seed)
 
         self.incubation_period = incubation_period
         self.infectious_period = infectious_period

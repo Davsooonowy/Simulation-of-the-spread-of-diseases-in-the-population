@@ -114,20 +114,25 @@ backend=biber]{biblatex}
 Niniejszy dokument stanowi całościowy raport z~projektu, którego celem jest
 zaprojektowanie i~stopniowa implementacja symulacji agentowej (Agent-Based
 Model, ABM) rozprzestrzeniania się pandemii wirusowej w~populacji miejskiej.
-Projekt realizowany jest w~trzech etapach: (1)~zaprojektowanie architektury
-i~wstępna implementacja działającego prototypu modelu SEIRD, (2)~rozszerzenie
-modelu o~heterogeniczne środowisko miejskie oparte na~węzłach POI (szkoła,
-praca, dom) oraz interaktywny interfejs użytkownika, (3)~właściwy eksperyment
-badawczy porównujący scenariusze interwencji epidemicznych.
-Etap~1, opisany w~niniejszym raporcie, dostarcza działający prototyp:
-model SEIRD zaimplementowany w~Pythonie z~użyciem frameworku Mesa,
-w~którym agenci poruszają się po siatce i~zarażają sąsiadów
-z~prawdopodobieństwem zależnym od aktualnego stanu klinicznego.
-Emergentny współczynnik reprodukcji wynosi $R_0 \approx 2{,}6$, co jest
-zgodne z~danymi epidemiologicznymi dla pandemicznych wirusów oddechowych.
+Projekt zrealizowano w~trzech etapach: (1)~zaprojektowanie architektury
+i~prototyp modelu SEIRD na~siatce, (2)~pełna implementacja heterogenicznego
+środowiska miejskiego opartego na~węzłach POI (dom, szkoła, praca), mechanizmów
+transmisji oraz interaktywnego interfejsu użytkownika wraz z~kalibracją
+i~testami, (3)~właściwy eksperyment badawczy porównujący siedem scenariuszy
+interwencji epidemicznych. Model zaimplementowano w~Pythonie z~użyciem
+frameworku Mesa; eksperymenty są w~pełni odtwarzalne (stałe ziarna losowe).
+Współczynnik reprodukcji wyznaczono empirycznie dwiema niezależnymi metodami
+(odtworzenie krzywej $R_e(t)$ oraz relacja rozmiaru końcowego epidemii),
+otrzymując zgodne $R_0 \approx 1{,}9$, na~dolnej granicy zakresu typowego dla
+pandemicznych wirusów oddechowych. Eksperyment wykazał m.in., że~lockdown
+natychmiastowy redukuje attack rate z~$\approx 80\%$ do~$\approx 3{,}5\%$,
+że~zaledwie $\approx 9$-dniowe opóźnienie reakcji zwiększa zasięg epidemii
+blisko czterokrotnie, oraz że~realistyczny pakiet łagodnych interwencji
+(maseczki, higiena, częściowe szczepienia) tłumi epidemię niemal tak skutecznie
+jak lockdown reaktywny, lecz bez zamykania miejsc pracy.
 
 \noindent\textbf{Słowa kluczowe:} modelowanie agentowe, epidemiologia obliczeniowa,
-model SEIRD, transmisja chorób, Mesa, Python
+model SEIRD, efektywne $R_e(t)$, transmisja chorób, Mesa, Python
 \end{abstract}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -400,6 +405,24 @@ wzór~\cite{eubank2004modelling}:
 na~jeden kontakt z~zakaźnym agentem, zależne od~typu węzła POI.
 Wzór odzwierciedla fakt, że każda kolejna osoba zakaźna obecna w~tym
 samym miejscu niezależnie zwiększa ryzyko ekspozycji.
+
+W~docelowej implementacji (Etap~2, plik \texttt{transmission.py}) wzór ten
+rozszerzono o~indywidualny ładunek wirusowy $v_i$ każdego zakaźnego agenta~$i$
+oraz odporność podatnego agenta, dając efektywne prawdopodobieństwo zakażenia
+w~jednym kroku:
+
+\begin{equation}
+  P_{\text{inf}} = \Bigl(1 - \prod_{i \in \mathcal{C}} (1 - p_{\text{eff},i})^{v_i}\Bigr)
+                   \cdot (1 - \text{immunity})
+  \label{eq:poi-inf-impl}
+\end{equation}
+
+\noindent gdzie $\mathcal{C}$ to zbiór (co~najwyżej \texttt{MAX\_INFECTIOUS\_CONTACTS},
+zob.\ Sekcja~\ref{sec:transmission-impl}) wylosowanych zakaźnych sąsiadów,
+$p_{\text{eff},i}$~-- prawdopodobieństwo zmodyfikowane przez maseczki, dystans
+i~higienę (wzory~\eqref{eq:mask} i~\eqref{eq:hygiene-factor}), a~$v_i \in [0,1]$~--
+ładunek wirusowy agenta~$i$. Człon $(1-\text{immunity})$ obniża ryzyko
+u~osób zaszczepionych lub po~przebytej infekcji.
 
 Tabela~\ref{tab:poi-risk} zestawia wartości $p_{\text{base}}$ dla
 poszczególnych typów węzłów, uzasadnione różnicami w~zagęszczeniu
@@ -731,13 +754,23 @@ siłę zakażenia $\lambda \gg 1$.
 Nominalne wartości $p_{\text{base}}$ z~Tabeli~\ref{tab:poi-risk} projektowane
 były z~myślą o~scenariuszach par (1~zakaźny, 1~podatny).
 W~zaimplementowanym modelu węzłowym dokonano przeskalowania przez
-$p_{\text{mult}} = 0{,}16$, co~prowadzi do~efektywnego $R_0 \approx 2{,}5$
-i~attack~rate~$\approx 75\%$ przy braku interwencji -- wartości zgodnych
-z~parametrami pandemicznych wirusów oddechowych~\cite{anderson1992infectious}.
-Transmisję tranzytową wyłączono (\texttt{p\_transit}~$=0$) po~stwierdzeniu,
-że~model grupowania tras w~pierwotnej implementacji łączył wszystkich
-pasażerów podróżujących do~danego \emph{typu} POI (zamiast do~tego samego
-konkretnego węzła), co~powodowało artefaktualny R0~$\gg~10$.
+$p_{\text{mult}} = 0{,}16$, co~prowadzi do~attack~rate~$\approx 76$--$80\%$
+przy braku interwencji. Odpowiadający temu współczynnik reprodukcji
+wyznaczono empirycznie (Sekcja~\ref{sec:rt}) na~$R_0 \approx 1{,}9$ -- wartość
+na~dolnej granicy zakresu typowego dla pandemicznych wirusów
+oddechowych~\cite{anderson1992infectious}. Transmisję tranzytową wyłączono
+(\texttt{p\_transit}~$=0$) po~stwierdzeniu, że~model grupowania tras
+w~pierwotnej implementacji łączył wszystkich pasażerów podróżujących
+do~danego \emph{typu} POI (zamiast do~tego samego konkretnego węzła),
+co~powodowało artefaktualny R0~$\gg~10$.
+
+\paragraph{Czasy trwania faz.} W~zaimplementowanym modelu czasy przejść
+$E \to I$ oraz $I \to R/D$ pozostawiono jako wartości stałe
+($4$~i~$8$~dni) -- świadome uproszczenie ułatwiające kalibrację i~testowanie.
+Zapowiadane w~Etapie~1 losowanie tych czasów z~rozkładu Gamma
+(Tabela~\ref{tab:pathogen}) nie~zostało wdrożone; wprowadzenie naturalnej
+wariancji biologicznej traktujemy jako kierunek dalszych prac
+(Sekcja~\ref{sec:limitations}).
 
 \subsection{Implementacja atrybutów behawioralnych}
 \label{sec:behavioral-impl}
@@ -804,24 +837,76 @@ wpływ jest marginalny.
 \section{Etap~3: Właściwy eksperyment i~projekt końcowy}
 \label{sec:stage3}
 
-Etap trzeci stanowi właściwą część badawczą projektu: sześć scenariuszy
+Etap trzeci stanowi właściwą część badawczą projektu: siedem scenariuszy
 epidemicznych porównanych ilościowo pod~kątem szczytowej liczby zakaźnych
 (\textit{peak I}), sumarycznego wskaźnika zakażeń (attack rate) i~liczby
-zgonów. Rozszerzeniem względem pierwotnego planu jest dodanie scenariusza
-\textit{lockdownu reaktywnego}, wprowadzonego nie~od~pierwszego dnia,
-lecz~dopiero po~przekroczeniu progowego poziomu zakażeń -- co~pozwala
-ilościowo zbadać koszt opóźnionej reakcji służb publicznych.
+zgonów. Rozszerzeniem względem pierwotnego planu są dwa dodatkowe scenariusze:
+\textit{lockdown reaktywny}, wprowadzony nie~od~pierwszego dnia, lecz~dopiero
+po~przekroczeniu progowego poziomu zakażeń (koszt opóźnionej reakcji służb
+publicznych), oraz \textit{interwencje łączone} -- realistyczny pakiet
+łagodnych środków stosowanych jednocześnie. Dodatkowo dla każdego scenariusza
+wyznaczono empiryczny przebieg efektywnego współczynnika reprodukcji
+$R_e(t)$ (Sekcja~\ref{sec:rt}).
 
 \subsection{Metodologia eksperymentu}
 \label{sec:exp-methodology}
 
-Każdy scenariusz uruchomiono $n = 7$~razy (różne ziarna losowe), aby
-zminimalizować stochastyczną wariancję wyników. Parametry bazowe symulacji:
-$N = 500$ agentów, inkubacja~4~dni, zakaźność~8~dni,
-$p_{\text{death}} = 0{,}02$, $p_{\text{mult}} = 0{,}16$,
+Każdy scenariusz uruchomiono $n = 7$~razy, aby zminimalizować stochastyczną
+wariancję wyników. Dla zapewnienia pełnej \textbf{odtwarzalności} każdy bieg
+korzysta ze~stałego ziarna losowego (\texttt{seed}~$=$~\texttt{12345}~$+$~indeks
+biegu), co~gwarantuje identyczne wyniki przy każdym uruchomieniu eksperymentu.
+Parametry bazowe symulacji: $N = 500$ agentów, inkubacja~4~dni,
+zakaźność~8~dni, $p_{\text{death}} = 0{,}02$, $p_{\text{mult}} = 0{,}16$,
 czas symulacji~180~kroków. Startowe zakażenia: 2\% populacji
 w~stanie~I. Wykresy prezentują mediany przebiegów z~pasmem
 \mbox{IQR} (25.--75.~percentyl).
+
+\subsection{Empiryczny współczynnik reprodukcji $R_e(t)$}
+\label{sec:rt}
+
+Zamiast jedynie zakładać wartość $R_0$, wyznaczono ją \emph{empirycznie}
+z~przebiegu symulacji. Efektywny współczynnik reprodukcji $R_e(t)$ -- średnią
+liczbę wtórnych zakażeń wywołanych przez jednego zakaźnego agenta w~dniu~$t$ --
+oszacowano z~zależności:
+
+\begin{equation}
+  R_e(t) \approx \frac{\text{inc}(t)}{I(t)} \cdot T_I,
+  \qquad \text{inc}(t) = S(t-1) - S(t)
+  \label{eq:rt}
+\end{equation}
+
+\noindent gdzie $\text{inc}(t)$ to dzienna zapadalność (liczba nowych zakażeń;
+ponieważ kompartment~$S$ maleje wyłącznie na~rzecz~$E$, jest ona równa spadkowi
+liczebności~$S$), $I(t)$~-- liczba aktywnie zakaźnych, a~$T_I = 8$~dni to~czas
+zakaźności. Wartości wygładzono 9-dniową średnią ruchomą i~maskowano dla
+$I < 5$ (eliminacja szumu przy wygasaniu epidemii).
+
+Rysunek~\ref{fig:stage3-rt} przedstawia $R_e(t)$ dla kluczowych scenariuszy.
+Uśredniając $R_e(t)$ w~fazie wczesnej (przed istotnym wyczerpaniem populacji
+podatnej) dla scenariusza bazowego, otrzymano \textbf{empiryczne
+$R_0 \approx 1{,}9$}. Wartość ta jest spójna z~drugą, niezależną metodą --
+relacją rozmiaru końcowego epidemii $\text{AR} = 1 - e^{-R_0 \cdot \text{AR}}$,
+która dla attack~rate~$\approx 80\%$ daje $R_0 \approx 2{,}0$. Zgodność dwóch
+metod potwierdza, że~model operuje w~dolnej części zakresu pandemicznych
+wirusów oddechowych ($R_0 \in [2{,}0; 3{,}5]$).
+
+Wykres ujawnia mechanikę poszczególnych interwencji: w~scenariuszu bazowym
+$R_e(t)$ utrzymuje się powyżej~1 aż do~ok.\ dnia~33 (wtedy wyczerpanie
+podatnych samoistnie zbija transmisję); lockdown natychmiastowy trzyma
+$R_e(t)$ trwale poniżej~$0{,}5$; lockdown reaktywny załamuje $R_e(t)$ poniżej~1
+dokładnie w~momencie aktywacji (dzień~$\approx 9$); interwencje łączone od~startu
+utrzymują $R_e(t) \lesssim 1$. W~scenariuszu szczepień widoczny jest późny pik
+wtórny $R_e(t)$, odpowiadający ognisku w~grupie nieszczepionych.
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{stage3_rt.png}
+  \caption{Empiryczny efektywny współczynnik reprodukcji $R_e(t)$ dla
+           wybranych scenariuszy (mediana 7~powtórzeń). Linia przerywana --
+           próg epidemiczny $R_e = 1$; pionowa kropkowana -- moment aktywacji
+           lockdownu reaktywnego. Wczesnofazowe $R_0 \approx 1{,}9$.}
+  \label{fig:stage3-rt}
+\end{figure}
 
 \subsection{Scenariusz 1: Bazowy -- pandemia bez interwencji}
 \label{sec:sc-baseline}
@@ -830,10 +915,10 @@ Pandemia bez żadnych interwencji farmaceutycznych ani~niemedycznych.
 Model rejestruje emergentną dynamikę SEIRD wynikającą wyłącznie ze~struktury
 przestrzeni POI i~parametrów biologicznych patogenu.
 
-Wyniki: attack rate~$\approx 78\%$, szczyt zakaźnych ($I_{\max} \approx 92$)
-osiągany ok.\ dnia~32, zgony~$\approx 8$.
-Efektywne $R_0 \approx 2{,}5$, zgodne z~literaturą dla wirusów oddechowych
-~\cite{anderson1992infectious}.
+Wyniki: attack rate~$\approx 79{,}7\%$, szczyt zakaźnych ($I_{\max} \approx 91$)
+osiągany ok.\ dnia~34, zgony~$\approx 7$.
+Empiryczne $R_0 \approx 1{,}9$ (Sekcja~\ref{sec:rt}), na~dolnej granicy
+zakresu dla wirusów oddechowych~\cite{anderson1992infectious}.
 
 \subsection{Scenariusz 2a: Lockdown natychmiastowy}
 \label{sec:sc-lockdown-imm}
@@ -842,8 +927,8 @@ Pełny lockdown aktywowany od~dnia~0 symulacji: zamknięcie wszystkich miejsc
 pracy (szkoły~+~biura) i~sklepów. Agenci pozostają w~gospodarstwach
 domowych; parki i~placówki zdrowotne pozostają otwarte.
 
-Wyniki: attack rate spada do~$\approx 4{,}0\%$ -- redukcja o~95\%
-względem scenariusza bazowego. Szczyt zakaźnych $I_{\max} \approx 15$,
+Wyniki: attack rate spada do~$\approx 3{,}5\%$ -- redukcja o~ponad~95\%
+względem scenariusza bazowego. Szczyt zakaźnych $I_{\max} \approx 14$,
 zgony~$< 1$. Lockdown eliminuje główne drogi transmisji (biuro, szkoła),
 pozostawiając jedynie przeniesienie wewnątrzdomowe o~ograniczonym zasięgu.
 
@@ -861,41 +946,44 @@ liczba agentów w~stanie~I; gdy po~raz~pierwszy przekroczy~$I_{\text{thr}}$,
 ustawiany jest atrybut \texttt{model.lockdown~=~True}, co~blokuje
 miejsca pracy i~sklepy od~następnego dnia symulacji.
 
-Wyniki: lockdown aktywował się średnio w~dniu~$\approx 13$, gdy epidemia
-zdążyła już zainfekować część populacji. Attack rate wyniosła~$\approx 14\%$
-(redukcja o~82\% vs.\ bazowy, lecz trzykrotnie więcej niż przy lockdownie
-natychmiastowym), szczyt zakaźnych $I_{\max} \approx 36$ (dzień~17),
-zgony~$\approx 1$.
+Wyniki: lockdown aktywował się średnio w~dniu~$\approx 9$, gdy epidemia
+zdążyła już zainfekować część populacji. Attack rate wyniosła~$\approx 13{,}2\%$
+(redukcja o~$\approx 83\%$ vs.\ bazowy, lecz blisko czterokrotnie więcej niż
+przy lockdownie natychmiastowym), szczyt zakaźnych $I_{\max} \approx 38$
+(dzień~13), zgony~$\approx 2$.
 
 Rysunek~\ref{fig:stage3-lockdown} zestawia krzywe dla trzech wariantów:
 brak interwencji, lockdown reaktywny i~lockdown natychmiastowy.
-Opóźnienie zaledwie $\approx 13$~dni powoduje wzrost attack rate z~4\%
-do~14\% -- ilościowy dowód, że~wczesna reakcja ma~decydujące znaczenie.
+Opóźnienie zaledwie $\approx 9$~dni powoduje wzrost attack rate z~3{,}5\%
+do~13\% -- ilościowy dowód, że~wczesna reakcja ma~decydujące znaczenie.
 
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\columnwidth]{stage3_lockdown_compare.png}
   \caption{Porównanie strategii lockdownu: brak / reaktywny (aktywacja
-           dzień~$\approx 13$, gdy $I \geq 25$) / natychmiastowy (od~dnia~0).
-           Opóźnienie 13~dni zwiększa attack rate 3,5-krotnie.}
+           dzień~$\approx 9$, gdy $I \geq 25$) / natychmiastowy (od~dnia~0).
+           Opóźnienie $\approx 9$~dni zwiększa attack rate blisko czterokrotnie.}
   \label{fig:stage3-lockdown}
 \end{figure}
 
 \subsection{Scenariusz 3: Kampania szczepień -- 60\% pokrycia}
 \label{sec:sc-vaccination}
 
-Zaszczepiono 60\% populacji przed~startem epidemii
-(\texttt{immunity}~$=0{,}5$, redukcja ryzyka zgonu o~80\%).
-Poziom ten przekracza próg odporności stadnej
-$1 - 1/R_0 \approx 60\%$ dla~$R_0 = 2{,}5$.
+Zaszczepiono 60\% populacji przed~startem epidemii. Modelowana szczepionka
+jest \emph{nieszczelna} (\textit{leaky}): obniża podatność o~połowę
+(\texttt{immunity}~$=0{,}5$) i~redukuje ryzyko zgonu o~80\%, ale nie~daje
+pełnej sterylizującej ochrony. Teoretyczny próg odporności stadnej dla
+$R_0 \approx 1{,}9$ wynosi $1 - 1/R_0 \approx 47\%$, jednak dotyczy on
+odporności \emph{pełnej} -- przy ochronie częściowej efektywna liczba
+uodpornionych jest znacznie niższa niż~60\%.
 
-Wyniki: attack rate~$\approx 43\%$ (redukcja o~45\%),
-szczyt zakaźnych~$I_{\max} \approx 37$, zgony~$\approx 2$.
-Mimo osiągnięcia progu odporności stadnej epidemia nie~zostaje
-całkowicie zatrzymana -- w~grupie niezaszczepionych tworzy się
-lokalny klaster transmisji. Kluczowy wniosek: szczepienia chronią
-głównie przed zgonem (redukcja o~75\%), nie~zaś w~całości przed
-zakażeniem.
+Wyniki: attack rate~$\approx 52{,}6\%$ (redukcja o~$\approx 34\%$),
+szczyt zakaźnych~$I_{\max} \approx 49$, zgony~$\approx 3{,}6$
+(redukcja o~$\approx 51\%$). Mimo wysokiego pokrycia epidemia nie~zostaje
+zatrzymana -- w~grupie niezaszczepionych tworzy się lokalny klaster
+transmisji (widoczny jako późny pik $R_e(t)$ na~Rys.~\ref{fig:stage3-rt}).
+Kluczowy wniosek: nieszczelna szczepionka chroni przede wszystkim
+przed~zgonem, w~mniejszym stopniu przed samym zakażeniem.
 
 \subsection{Scenariusz 4: Superspreaderzy}
 \label{sec:sc-super}
@@ -906,11 +994,18 @@ prawdopodobieństwo wizyt w~sklepach i~parkach) oraz
 \texttt{hygiene\_score}~$= 0{,}1$ (słaba higiena $\to$ wyższe
 $p_{\text{eff}}$). Pozostała populacja: wartości domyślne.
 
-Wyniki: attack rate~$\approx 79\%$ (wzrost o~4\~p.p.\ vs.\ bazowy),
-szczyt zakaźnych $I_{\max} \approx 100$, szczyt osiągany ok.\ 1--2~dni
-wcześniej. Mała grupa superspreaderów (25~agentów na~500) odpowiada
-za~nieproporcjonalnie dużą inicjalną ekspansję epidemii, co~jest
-zgodne z~empiryczną obserwacją zasady~80/20 w~epidemiologii~\cite{lloyd2001realistic}.
+Wyniki: attack rate~$\approx 79{,}3\%$ (praktycznie równy bazowemu),
+szczyt zakaźnych $I_{\max} \approx 100$ (vs.\ 91 w~bazowym, $+10\%$),
+zgony~$\approx 9$. Na~pierwszy rzut oka efekt superspreaderów wydaje się
+znikomy, jednak to~artefakt \emph{efektu sufitu}: scenariusz bazowy jest
+już niemal nasycony (attack~rate~$\approx 80\%$), więc nie~ma ,,miejsca''
+na~wzrost zasięgu. Rzeczywisty wpływ superspreaderów ujawnia się w~innych
+miarach: \textbf{wyższy i~ostrzejszy szczyt} ($I_{\max}$ o~10\% większy)
+oraz większa liczba zgonów. Mała grupa (25~agentów na~500) napędza
+nieproporcjonalnie dużą część transmisji, zgodnie z~zasadą~80/20
+w~epidemiologii~\cite{lloyd2001realistic}. Pełne ujawnienie tego efektu
+wymagałoby reżimu nienasyconego (np.\ przy umiarkowanych interwencjach)
+-- co~odnotowujemy jako kierunek dalszych prac (Sekcja~\ref{sec:limitations}).
 
 \subsection{Scenariusz 5: Wpływ higieny rąk}
 \label{sec:sc-hygiene}
@@ -918,24 +1013,46 @@ zgodne z~empiryczną obserwacją zasady~80/20 w~epidemiologii~\cite{lloyd2001rea
 Porównano trzy populacje różniące się rozkładem $\Theta_H$:
 
 \begin{itemize}
-  \item niska higiena ($\bar{\Theta}_H = 0{,}15$): attack~rate~$\approx 85\%$,
-        $I_{\max} \approx 115$, szczyt dzień~24,
-  \item higiena bazowa ($\bar{\Theta}_H = 0{,}50$): attack~rate~$\approx 76\%$,
-        $I_{\max} \approx 86$, szczyt dzień~31,
-  \item wysoka higiena ($\bar{\Theta}_H = 0{,}85$): attack~rate~$\approx 64\%$,
-        $I_{\max} \approx 54$, szczyt dzień~42.
+  \item niska higiena ($\bar{\Theta}_H = 0{,}15$): attack~rate~$\approx 83{,}7\%$,
+        $I_{\max} \approx 118$, szczyt dzień~30,
+  \item higiena bazowa ($\bar{\Theta}_H = 0{,}50$): attack~rate~$\approx 76{,}1\%$,
+        $I_{\max} \approx 91$, szczyt dzień~35,
+  \item wysoka higiena ($\bar{\Theta}_H = 0{,}85$): attack~rate~$\approx 64{,}4\%$,
+        $I_{\max} \approx 66$, szczyt dzień~39.
 \end{itemize}
 
-Wzrost $\bar{\Theta}_H$ o~0,35 jednostki obniża attack rate
-o~$\approx 11$~p.p.\ i~opóźnia szczyt o~$\approx 18$~dni.
-Wysoka higiena samodzielnie nie~eliminuje epidemii (R0~>~1 nadal),
+Wzrost $\bar{\Theta}_H$ z~0,15 do~0,85 obniża attack rate
+o~$\approx 19$~p.p., redukuje szczyt zakaźnych o~ponad~40\%
+i~opóźnia go~o~$\approx 9$~dni. Wysoka higiena samodzielnie
+nie~eliminuje epidemii ($R_e > 1$ nadal we~wczesnej fazie),
 lecz wyraźnie spłaszcza krzywą zakaźnych (ang.\ \textit{flatten the curve}).
+
+\subsection{Scenariusz 6: Interwencje łączone}
+\label{sec:sc-combined}
+
+Wszystkie poprzednie scenariusze badały interwencje w~izolacji. Scenariusz~6
+modeluje \textit{realistyczny pakiet} łagodnych środków stosowanych
+jednocześnie -- tak, jak wygląda rzeczywista polityka zdrowia publicznego:
+50\% populacji w~maseczkach, podniesiona higiena ($\bar{\Theta}_H = 0{,}70$)
+oraz umiarkowane pokrycie szczepieniami (40\%). Żaden z~tych środków
+z~osobna nie~jest szczególnie silny.
+
+Wyniki: attack rate~$\approx 11{,}7\%$ (redukcja o~$\approx 85\%$
+względem bazowego), szczyt zakaźnych $I_{\max} \approx 16$ (dzień~11),
+zgony~$< 1$. Efekt jest \textbf{silnie nieliniowy} (synergiczny):
+złożenie trzech łagodnych interwencji daje skuteczność porównywalną
+z~lockdownem reaktywnym (attack~rate~$13{,}2\%$), lecz \emph{bez} zamykania
+miejsc pracy, szkół i~sklepów. Krzywa $R_e(t)$ (Rys.~\ref{fig:stage3-rt})
+od~początku utrzymuje się poniżej~1, co~oznacza wygaszanie epidemii
+od~pierwszego dnia. To~najważniejszy wniosek praktyczny eksperymentu:
+skoordynowany pakiet umiarkowanych środków może zastąpić drakoński lockdown
+przy znikomym koszcie społeczno-gospodarczym.
 
 \subsection{Wyniki zbiorcze}
 \label{sec:exp-results}
 
 Tabela~\ref{tab:stage3-results} zestawia mediany wszystkich miar
-dla pięciu scenariuszy. Rysunek~\ref{fig:stage3-comparison} prezentuje
+dla siedmiu scenariuszy. Rysunek~\ref{fig:stage3-comparison} prezentuje
 krzywe SEIRD dla każdego scenariusza, Rysunek~\ref{fig:stage3-summary}
 słupkowe porównanie kluczowych wskaźników, a~Rysunek~\ref{fig:stage3-hygiene}
 szczegółowe porównanie poziomów higieny.
@@ -943,16 +1060,17 @@ szczegółowe porównanie poziomów higieny.
 \begin{table}[!htbp]
 \centering
 \caption{Zbiorcze wyniki eksperymentów Stage~3
-         ($N=500$, 7~powtórzeń, 180~kroków)}
+         ($N=500$, 7~powtórzeń, 180~kroków, ziarno=12345)}
 \begin{tabularx}{\columnwidth}{@{}lYYYY@{}} \toprule
   \textbf{Scenariusz} & \textbf{Attack rate} & \textbf{Peak~I} &
   \textbf{Dzień szczytu} & \textbf{Zgony} \\ \midrule
-  Bazowy (brak interwencji) & 77{,}7\% & 92 & 32 & 8 \\
-  Lockdown natychmiastowy (d.~0) & 4{,}0\% & 15 & 7 & $<1$ \\
-  Lockdown reaktywny (d.~$\approx$13) & 14{,}2\% & 36 & 17 & 1 \\
-  Szczepienia (60\%) & 42{,}5\% & 37 & 30 & 2 \\
-  Superspreaderzy (5\%) & 78{,}2\% & 95 & 35 & 8 \\
-  Wysoka higiena ($\bar{\Theta}_H$=0,85) & 65{,}5\% & 65 & 34 & 7 \\
+  Bazowy (brak interwencji) & 79{,}7\% & 91 & 34 & 7 \\
+  Lockdown natychmiastowy (d.~0) & 3{,}5\% & 14 & 8 & $<1$ \\
+  Lockdown reaktywny (d.~$\approx$9) & 13{,}2\% & 38 & 13 & 2 \\
+  Szczepienia (60\%) & 52{,}6\% & 49 & 31 & 4 \\
+  Superspreaderzy (5\%) & 79{,}3\% & 100 & 35 & 9 \\
+  Wysoka higiena ($\bar{\Theta}_H$=0,85) & 61{,}7\% & 63 & 43 & 7 \\
+  Interwencje łączone & 11{,}7\% & 16 & 11 & $<1$ \\
   \bottomrule
 \end{tabularx}
 \label{tab:stage3-results}
@@ -961,7 +1079,7 @@ szczegółowe porównanie poziomów higieny.
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\columnwidth]{stage3_comparison.png}
-  \caption{Krzywe SEIRD dla sześciu scenariuszy Stage~3 (siatka 2$\times$3).
+  \caption{Krzywe SEIRD dla siedmiu scenariuszy Stage~3 (siatka 2$\times$4).
            Linie ciągłe -- mediana 7~powtórzeń; pasma -- IQR.
            Pionowa przerywana w~Sc.~2b oznacza moment aktywacji lockdownu.}
   \label{fig:stage3-comparison}
@@ -971,7 +1089,7 @@ szczegółowe porównanie poziomów higieny.
   \centering
   \includegraphics[width=\columnwidth]{stage3_summary.png}
   \caption{Porównanie kluczowych wskaźników: szczyt zakaźnych,
-           attack rate i~liczba zgonów dla sześciu scenariuszy.
+           attack rate i~liczba zgonów dla siedmiu scenariuszy.
            Słupki błędów: odchylenie standardowe między powtórzeniami.}
   \label{fig:stage3-summary}
 \end{figure}
@@ -986,6 +1104,42 @@ szczegółowe porównanie poziomów higieny.
 \end{figure}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Ograniczenia i~kierunki dalszych prac}
+\label{sec:limitations}
+
+Świadoma identyfikacja ograniczeń jest elementem rzetelności pracy
+modelarskiej. Najważniejsze uproszczenia obecnej implementacji oraz
+wynikające z~nich kierunki rozwoju:
+
+\begin{itemize}
+  \item \textbf{Stałe czasy trwania faz.} Okresy inkubacji i~zakaźności
+        są wartościami stałymi (4 i~8~dni). Wprowadzenie losowania
+        z~rozkładu Gamma (zob.\ Tab.~\ref{tab:pathogen}) dodałoby naturalną
+        wariancję biologiczną -- dłuższy ogon zakażeń i~bardziej miękkie
+        krzywe epidemiczne.
+  \item \textbf{Brak modelu pojemności służby zdrowia.} Węzły zdrowotne
+        istnieją, lecz nie~mają ograniczonej pojemności. Dodanie progu
+        przeciążenia szpitali i~miary ,,osobodni ponad pojemnością''
+        wzmocniłoby argument o~,,spłaszczaniu krzywej''.
+  \item \textbf{Skończony rozmiar populacji.} $N = 500$ wprowadza efekty
+        skończonego rozmiaru (stochastyczne wygasanie, szum $R_e(t)$ przy
+        małym~$I$). Wskazane jest badanie skalowania wyników z~$N$.
+  \item \textbf{Efekt sufitu przy wysokim attack rate.} Wpływ niektórych
+        czynników (np.\ superspreaderów) jest maskowany przez nasycenie
+        scenariusza bazowego; ich pełna ocena wymaga reżimu nienasyconego.
+  \item \textbf{Uproszczony model odporności.} Szczepionka jest nieszczelna
+        i~stała w~czasie -- brak modelu zanikania odporności (\textit{waning})
+        i~reinfekcji, istotnych dla dynamiki wielofalowej.
+  \item \textbf{Pojedynczy patogen i~brak realnej topografii.} Architektura
+        (pliki YAML, rozszerzenie \texttt{mesa-geo}) jest przygotowana
+        na~wymianę patogenu i~integrację z~rzeczywistą siecią GIS/OpenStreetMap,
+        co~stanowi naturalny następny krok.
+  \item \textbf{Przegląd przestrzeni parametrów.} Pojedyncze punkty (60\%
+        szczepień, 50\% maseczek) warto zastąpić przeglądem ciągłym (sweep),
+        by~empirycznie wyznaczyć np.\ próg pokrycia szczepień dławiący epidemię.
+\end{itemize}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{\SectionTitleSummary}
 \label{sec:conclusions}
 
@@ -997,7 +1151,9 @@ wieloskalowej symulacji agentowej rozprzestrzeniania się pandemii wirusowej.
 Prototyp MVP zrealizował model SEIRD na~siatce $50 \times 50$ z~losowym
 ruchem agentów, uzyskując emergentne $R_0 \approx 2{,}6$ -- wartość
 zgodną z~danymi epidemiologicznymi. Architektura kodu jest poprawna
-i~rozszerzalna.
+i~rozszerzalna. (Docelowy model węzłowy z~Etapu~2/3 ma~odmienną topologię
+kontaktów, stąd jego niezależnie zmierzone $R_0 \approx 1{,}9$ --
+Sekcja~\ref{sec:rt} -- różni się od~wartości prototypu siatkowego.)
 
 \subsection*{Wnioski z~Etapu~2}
 
@@ -1010,29 +1166,38 @@ Zestaw 25~testów automatycznych weryfikuje poprawność każdego komponentu.
 
 \subsection*{Wnioski z~Etapu~3}
 
-Wyniki eksperymentów prowadzą do~pięciu wniosków epidemiologicznych:
+Współczynnik reprodukcji wyznaczono empirycznie dwiema niezależnymi metodami
+(odtworzenie $R_e(t)$ oraz relacja rozmiaru końcowego), otrzymując zgodne
+$R_0 \approx 1{,}9$. Wyniki eksperymentów prowadzą do~sześciu wniosków
+epidemiologicznych:
 
 \begin{enumerate}
-  \item \textbf{Lockdown natychmiastowy jest najskuteczniejszą interwencją}:
-        redukcja attack rate z~78\% do~4\% -- efekt wynikający z~przecięcia
-        wszystkich pozadomowych ścieżek transmisji od~pierwszego dnia.
+  \item \textbf{Lockdown natychmiastowy jest najskuteczniejszą pojedynczą
+        interwencją}: redukcja attack rate z~$\approx 80\%$ do~$3{,}5\%$ --
+        efekt przecięcia wszystkich pozadomowych ścieżek transmisji
+        od~pierwszego dnia ($R_e(t)$ trwale poniżej~$0{,}5$).
   \item \textbf{Koszt opóźnienia lockdownu jest nieproporcjonalnie wysoki}:
-        opóźnienie zaledwie $\approx 13$~dni (do~przekroczenia progu $I \geq 5\%$)
-        powoduje wzrost attack rate z~4\% do~14\% -- trzykrotny wzrost.
-        Lockdown reaktywny wciąż redukuje AR o~82\% vs.\ brak interwencji,
-        ale jego skuteczność spada wykładniczo z~każdym dniem zwłoki.
-  \item \textbf{Szczepienia chronią przede wszystkim przed zgonem}:
-        przy 60\% pokryciu attack rate spada do~$\approx 43\%$,
-        ale zgony redukowane są o~75\%. W~populacji niezaszczepionych
-        tworzy się klaster transmisji omijający odporność stadną.
-  \item \textbf{Superspreaderzy przyspieszają epidemię}: 5\% populacji
-        o~wysokim \texttt{contact\_rate} i~niskim $\Theta_H$ skraca czas
-        do~szczytu o~1--2~dni i~nieznacznie podnosi attack rate, co~jest
-        zgodne z~zasadą 80/20~\cite{lloyd2001realistic}.
+        opóźnienie zaledwie $\approx 9$~dni (do~przekroczenia progu $I \geq 5\%$)
+        powoduje wzrost attack rate z~$3{,}5\%$ do~$13\%$ -- blisko czterokrotny.
+        Każdy dzień zwłoki lawinowo powiększa zasięg.
+  \item \textbf{Pakiet łagodnych interwencji może zastąpić lockdown}:
+        połączenie maseczek (50\%), higieny i~częściowych szczepień (40\%)
+        redukuje attack rate do~$\approx 12\%$ -- niemal tyle, co~lockdown
+        reaktywny, lecz \emph{bez} zamykania gospodarki. Efekt jest
+        synergiczny (nieliniowy), niewidoczny przy badaniu środków osobno.
+  \item \textbf{Nieszczelne szczepienia chronią głównie przed zgonem}:
+        przy 60\% pokryciu attack rate spada do~$\approx 53\%$,
+        ale zgony redukowane są o~$\approx 51\%$. W~populacji niezaszczepionych
+        tworzy się klaster transmisji (późny pik $R_e(t)$).
+  \item \textbf{Superspreaderzy podnoszą szczyt, lecz attack rate maskuje
+        efekt sufitu}: 5\% populacji o~wysokim \texttt{contact\_rate} i~niskim
+        $\Theta_H$ zwiększa $I_{\max}$ o~$\approx 10\%$; brak wzrostu attack rate
+        wynika z~nasycenia scenariusza bazowego, nie~z~braku wpływu
+        (zasada 80/20~\cite{lloyd2001realistic}).
   \item \textbf{Higiena rąk spłaszcza krzywą, ale nie~eliminuje epidemii}:
-        przejście z~$\bar{\Theta}_H = 0{,}15$ do~$0{,}85$ obniża
-        attack rate o~$\approx 19$~p.p.\ i~opóźnia szczyt o~$\approx 10$~dni.
-        Samodzielna poprawa higieny nie~jest wystarczająca przy~$R_0 > 1$.
+        przejście z~$\bar{\Theta}_H = 0{,}15$ do~$0{,}85$ obniża attack rate
+        o~$\approx 19$~p.p., redukuje szczyt o~ponad~40\% i~opóźnia go~o~$\approx 9$~dni.
+        Samodzielna poprawa higieny nie~wystarcza przy~$R_e > 1$.
 \end{enumerate}
 
 Całościowy projekt potwierdza, że~podejście agentowe pozwala badać
