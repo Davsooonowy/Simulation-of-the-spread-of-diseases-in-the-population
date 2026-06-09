@@ -475,6 +475,29 @@
   \end{columns}
 \end{frame}
 
+\begin{frame}{,,Flatten the curve'': obciążenie szpitali}
+  \begin{columns}[T]
+    \column{0.58\textwidth}
+    \includegraphics[width=\textwidth]{stage3_hospital.png}
+
+    \column{0.42\textwidth}
+    {\small Popyt na~łóżka $= 15\%\cdot I(t)$; pojemność $C=8$.\\
+    \textbf{Osobodni $>$ pojemności} $=\sum_t \max(0,\,\text{popyt}-C)$.}
+
+    \vspace{0.2cm}
+    \begin{alertblock}{Tu ujawnia się superspreading}
+      Superspreaderzy: \textbf{104} osobodni -- \emph{najwięcej},
+      mimo AR $=$ baseline (82). Koszt w~szczycie, nie~w~AR.
+    \end{alertblock}
+
+    \vspace{0.1cm}
+    {\small
+    \textcolor{teal}{Szczepienia}: $-34\%$ AR, lecz popyt pod~linią $\Rightarrow$
+    osobodni $82\to1$.\\
+    \textcolor{teal}{Lockdown / łączone}: zero przeciążenia.}
+  \end{columns}
+\end{frame}
+
 % ============================================================
 \section{Wnioski}
 
@@ -535,7 +558,7 @@
     \textbf{Ograniczenia modelu:}
     \begin{itemize}
       \item Stałe czasy faz (4/8~dni) -- bez rozkładu Gamma
-      \item Brak pojemności szpitali (przeciążenie)
+      \item Przeciążenie szpitala bez sprzężenia ze~śmiertelnością
       \item $N=500$ -- efekty skończonego rozmiaru
       \item Nasycenie maskuje część efektów (sufit)
       \item Odporność stała -- brak zaniku (\textit{waning})
@@ -545,7 +568,7 @@
     \textbf{Dalsze prace:}
     \begin{itemize}
       \item Rozkłady Gamma czasów trwania faz
-      \item Próg przeciążenia szpitali + osobodni
+      \item Sprzężenie ,,brak łóżka $\to$ wyższe CFR''
       \item Przegląd parametrów (sweep pokrycia)
       \item Reżim nienasycony dla superspreaderów
       \item Realna topografia GIS (\texttt{mesa-geo})

@@ -25,6 +25,7 @@ Outputs (saved to data/output/ and reports/report1/):
     stage3_hygiene.png           — porównanie poziomów higieny
     stage3_lockdown_compare.png  — porównanie strategii lockdownu
     stage3_rt.png                — efektywne R(t) dla scenariuszy   ← NOWY
+    stage3_hospital.png          — popyt na łóżka + osobodni > pojemności  ← NOWY
     stage3_stats.txt             — pełne statystyki + empiryczne R0
 """
 from __future__ import annotations
@@ -48,6 +49,10 @@ STEPS              = 180
 N_RUNS             = 7
 BASE_SEED          = 12345                  # ziarno bazowe — pełna odtwarzalność
 LOCKDOWN_THRESHOLD = int(0.05 * N_AGENTS)   # 25 agentów = 5% populacji
+
+# Pojemność systemu ochrony zdrowia (ilustracyjna, dla N=500)
+HOSP_RATE     = 0.15   # frakcja aktywnie zakaźnych wymagających łóżka szpitalnego
+HOSP_CAPACITY = 8      # liczba dostępnych łóżek (16 / 1000 mieszkańców)
 
 BASE_PARAMS = dict(
     n_agents=N_AGENTS,
@@ -185,6 +190,25 @@ def compute_rt(data: dict, infectious_period: int,
         rt = inc_s / I_s * infectious_period
     rt[I_s < min_infectious] = np.nan
     return rt
+
+
+def hospital_metrics(data: dict, hosp_rate: float, capacity: float) -> dict:
+    """Hospital bed demand and overload metrics derived from the I curve.
+
+    Bed demand(t) = hosp_rate * I(t); overload(t) = max(0, demand - capacity).
+    ``person_days_over`` is the time-integral of the overload (pole nad linią
+    pojemności) — how much *and* how long the system is overwhelmed.
+    """
+    demand = hosp_rate * data["I"]                     # (n_runs, steps+1)
+    overload = np.clip(demand - capacity, 0.0, None)
+    person_days = overload.sum(axis=1)                 # per run
+    return {
+        "demand_median":   np.median(demand, axis=0),
+        "peak_demand":     float(demand.max(axis=1).mean()),
+        "pdays_mean":      float(person_days.mean()),
+        "pdays_std":       float(person_days.std()),
+        "any_overload":    bool((demand.max(axis=1) > capacity).any()),
+    }
 
 
 def empirical_r0(data: dict, infectious_period: int,
@@ -537,25 +561,86 @@ fig6.savefig(rep_dir / "stage3_rt.png", dpi=150, bbox_inches="tight")
 plt.close(fig6)
 print("Zapisano: stage3_rt.png")
 
+# ─── figure 7: hospital capacity & person-days over capacity ──────────────────
+
+print("\nAnaliza pojemności szpitala "
+      f"(łóżek={HOSP_CAPACITY}, odsetek hospitalizacji={HOSP_RATE:.0%}) …")
+
+hosp = {name: hospital_metrics(data, HOSP_RATE, HOSP_CAPACITY)
+        for name, data in results.items()}
+
+name_color = dict(zip(SCENARIOS.keys(), SCENARIO_COLORS))
+
+# scenariusze pokazane na wykresie krzywych popytu (gradient skuteczności)
+HOSP_SHOW = [
+    "Superspreaderzy\n(5% populacji)",
+    "Scenariusz bazowy\n(brak interwencji)",
+    "Wysoka higiena rąk\n(mean=0.85)",
+    "Kampania szczepień\n(60% populacji)",
+    "Interwencje łączone\n(maski+higiena+szczep.)",
+]
+
+fig7, (ax7a, ax7b) = plt.subplots(1, 2, figsize=(13, 5))
+fig7.suptitle(
+    f"Obciążenie systemu ochrony zdrowia (pojemność = {HOSP_CAPACITY} łóżek, "
+    f"{HOSP_RATE:.0%} zakaźnych wymaga hospitalizacji)",
+    fontsize=12, fontweight="bold"
+)
+
+ymax = max(hosp[n]["demand_median"].max() for n in HOSP_SHOW) * 1.1
+ax7a.axhspan(HOSP_CAPACITY, ymax, color="red", alpha=0.07)
+for name in HOSP_SHOW:
+    ax7a.plot(days, hosp[name]["demand_median"],
+              label=name.replace("\n", " "), color=name_color[name], linewidth=2.2)
+ax7a.axhline(HOSP_CAPACITY, color="red", linestyle="--", linewidth=1.6)
+ax7a.text(STEPS * 0.5, HOSP_CAPACITY + ymax * 0.02,
+          f"pojemność = {HOSP_CAPACITY} łóżek", color="red", fontsize=9)
+ax7a.set_title("Zapotrzebowanie na łóżka szpitalne", fontweight="bold")
+ax7a.set_xlabel("Dzień"); ax7a.set_ylabel("Łóżka (popyt)")
+ax7a.set_xlim(0, STEPS); ax7a.set_ylim(0, ymax)
+ax7a.legend(fontsize=8); ax7a.grid(alpha=0.3)
+
+x7 = np.arange(len(SCENARIOS))
+ax7b.bar(x7, [hosp[n]["pdays_mean"] for n in SCENARIOS],
+         yerr=[hosp[n]["pdays_std"] for n in SCENARIOS],
+         color=SCENARIO_COLORS, width=0.6, capsize=4,
+         error_kw=dict(elinewidth=1.2))
+ax7b.set_title("Osobodni ponad pojemnością", fontweight="bold")
+ax7b.set_ylabel("osobodni (łóżko·dzień)")
+ax7b.set_xticks(x7)
+ax7b.set_xticklabels([n.split("\n")[0] for n in SCENARIOS],
+                     rotation=25, ha="right", fontsize=7.5)
+ax7b.grid(axis="y", alpha=0.3)
+
+fig7.tight_layout()
+fig7.savefig(out_dir / "stage3_hospital.png", dpi=150, bbox_inches="tight")
+fig7.savefig(rep_dir / "stage3_hospital.png", dpi=150, bbox_inches="tight")
+plt.close(fig7)
+print("Zapisano: stage3_hospital.png")
+
 # ─── summary table ────────────────────────────────────────────────────────────
 
-print("\n" + "=" * 80)
-print(f"{'Scenariusz':<38} {'Peak I':>7} {'Attack%':>9} {'Zgony':>7} {'DzieńMax':>9}")
-print("-" * 80)
+print("\n" + "=" * 92)
+print(f"{'Scenariusz':<38} {'Peak I':>7} {'Attack%':>9} {'Zgony':>7} "
+      f"{'DzieńMax':>9} {'Osobodni>cap':>13}")
+print("-" * 92)
 for name, s in summary.items():
     label = name.replace("\n", " ")[:37]
-    extra = f" [LD dzień {lockdown_trigger_day:.0f}]" if name == DELAYED_KEY else ""
+    extra = f" [LD d.{lockdown_trigger_day:.0f}]" if name == DELAYED_KEY else ""
     print(f"{label:<38} {s['peak_I_mean']:>6.0f}  "
           f"{s['attack_rate']:>8.1f}%  "
           f"{s['total_deaths']:>6.1f}  "
-          f"{s['peak_day']:>8.1f}{extra}")
-print("=" * 80)
+          f"{s['peak_day']:>8.1f}  "
+          f"{hosp[name]['pdays_mean']:>11.1f}{extra}")
+print("=" * 92)
 print(f"Empiryczne R0 (baseline) = {R0_EMP:.2f}")
+print(f"Pojemność szpitala = {HOSP_CAPACITY} łóżek, odsetek hospitalizacji = {HOSP_RATE:.0%}")
 
 with open(out_dir / "stage3_stats.txt", "w") as f:
     f.write(f"Stage 3 Summary Statistics\n")
     f.write(f"N={N_AGENTS}, steps={STEPS}, runs={N_RUNS}, base_seed={BASE_SEED}\n")
     f.write(f"Empirical R0 (baseline, early phase): {R0_EMP:.3f}\n")
+    f.write(f"Hospital: capacity={HOSP_CAPACITY} beds, hosp_rate={HOSP_RATE}\n")
     if lockdown_trigger_day is not None:
         f.write(f"Reactive lockdown threshold: I >= {LOCKDOWN_THRESHOLD} agents\n")
         f.write(f"Average lockdown trigger day: {lockdown_trigger_day:.1f}\n")
@@ -564,6 +649,9 @@ with open(out_dir / "stage3_stats.txt", "w") as f:
         f.write(f"{name.replace(chr(10), ' ')}\n")
         for k, v in s.items():
             f.write(f"  {k}: {v:.2f}\n")
+        f.write(f"  peak_bed_demand: {hosp[name]['peak_demand']:.2f}\n")
+        f.write(f"  person_days_over_capacity: {hosp[name]['pdays_mean']:.2f}"
+                f" (std {hosp[name]['pdays_std']:.2f})\n")
         if name == DELAYED_KEY and lockdown_trigger_day is not None:
             f.write(f"  avg_lockdown_day: {lockdown_trigger_day:.1f}\n")
         f.write("\n")

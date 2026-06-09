@@ -1,6 +1,7 @@
 Stage 3 Summary Statistics
 N=500, steps=180, runs=7, base_seed=12345
 Empirical R0 (baseline, early phase): 1.826
+Hospital: capacity=8 beds, hosp_rate=0.15
 Reactive lockdown threshold: I >= 25 agents
 Average lockdown trigger day: 8.9
 
@@ -12,6 +13,8 @@ Scenariusz bazowy (brak interwencji)
   total_deaths: 7.43
   deaths_std: 1.92
   peak_day: 34.00
+  peak_bed_demand: 13.67
+  person_days_over_capacity: 82.26 (std 17.14)
 
 Lockdown natychmiastowy (od dnia 0)
   peak_I_mean: 14.43
@@ -21,6 +24,8 @@ Lockdown natychmiastowy (od dnia 0)
   total_deaths: 0.14
   deaths_std: 0.35
   peak_day: 7.71
+  peak_bed_demand: 2.16
+  person_days_over_capacity: 0.00 (std 0.00)
 
 Lockdown reaktywny (gdy I ≥ 25 ag.)
   peak_I_mean: 37.86
@@ -30,6 +35,8 @@ Lockdown reaktywny (gdy I ≥ 25 ag.)
   total_deaths: 1.57
   deaths_std: 1.05
   peak_day: 12.71
+  peak_bed_demand: 5.68
+  person_days_over_capacity: 0.00 (std 0.00)
   avg_lockdown_day: 8.9
 
 Kampania szczepień (60% populacji)
@@ -40,6 +47,8 @@ Kampania szczepień (60% populacji)
   total_deaths: 3.57
   deaths_std: 1.59
   peak_day: 31.00
+  peak_bed_demand: 7.37
+  person_days_over_capacity: 1.04 (std 1.65)
 
 Superspreaderzy (5% populacji)
   peak_I_mean: 100.00
@@ -49,6 +58,8 @@ Superspreaderzy (5% populacji)
   total_deaths: 9.29
   deaths_std: 1.58
   peak_day: 35.00
+  peak_bed_demand: 15.00
+  person_days_over_capacity: 104.41 (std 31.04)
 
 Wysoka higiena rąk (mean=0.85)
   peak_I_mean: 63.14
@@ -58,6 +69,8 @@ Wysoka higiena rąk (mean=0.85)
   total_deaths: 6.71
   deaths_std: 2.12
   peak_day: 42.86
+  peak_bed_demand: 9.47
+  person_days_over_capacity: 15.51 (std 9.77)
 
 Interwencje łączone (maski+higiena+szczep.)
   peak_I_mean: 15.71
@@ -67,4 +80,6 @@ Interwencje łączone (maski+higiena+szczep.)
   total_deaths: 0.86
   deaths_std: 0.64
   peak_day: 11.00
+  peak_bed_demand: 2.36
+  person_days_over_capacity: 0.00 (std 0.00)
 

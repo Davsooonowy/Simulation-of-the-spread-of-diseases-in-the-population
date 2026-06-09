@@ -1103,6 +1103,75 @@ szczegółowe porównanie poziomów higieny.
   \label{fig:stage3-hygiene}
 \end{figure}
 
+\subsection{Obciążenie systemu ochrony zdrowia}
+\label{sec:hospital}
+
+Sama wartość attack rate nie~oddaje pełnego kosztu epidemii -- równie istotne
+jest, czy~\emph{tempo} napływu chorych nie~przekracza wydolności systemu
+ochrony zdrowia. Aby zilustrować klasyczny argument ,,spłaszczania krzywej''
+(\textit{flatten the curve}), nałożono na~wyniki prostą warstwę pojemności:
+przyjęto, że~odsetek $h = 15\%$ aktywnie zakaźnych wymaga w~danym dniu łóżka
+szpitalnego, a~system dysponuje $C = 8$~łóżkami (wartość ilustracyjna dla
+$N=500$). Dzienne zapotrzebowanie i~jego przekroczenie wynoszą:
+
+\begin{equation}
+  \text{popyt}(t) = h \cdot I(t), \qquad
+  \text{przeciążenie}(t) = \max\bigl(0,\; h \cdot I(t) - C\bigr).
+  \label{eq:hosp}
+\end{equation}
+
+\noindent Całkowitą miarą skali \emph{i}~czasu trwania kryzysu jest
+\textbf{liczba osobodni ponad pojemnością} -- całka przeciążenia po~czasie,
+$\Omega = \sum_t \text{przeciążenie}(t)$ (pole nad linią pojemności
+na~Rys.~\ref{fig:stage3-hospital}).
+
+\begin{table}[!htbp]
+\centering
+\caption{Obciążenie szpitala wg scenariusza ($C=8$ łóżek, $h=15\%$)}
+\begin{tabularx}{\columnwidth}{@{}lYY@{}} \toprule
+  \textbf{Scenariusz} & \textbf{Szczyt popytu} & \textbf{Osobodni $>$ pojemn.} \\ \midrule
+  Bazowy (brak interwencji)   & 13,7 & 82,3 \\
+  Superspreaderzy (5\%)       & 15,1 & \textbf{104,4} \\
+  Wysoka higiena (0,85)       & 9,5  & 15,5 \\
+  Szczepienia (60\%)          & 7,4  & 1,0  \\
+  Lockdown reaktywny          & 5,7  & 0,0  \\
+  Lockdown natychmiastowy     & 2,1  & 0,0  \\
+  Interwencje łączone         & 2,4  & 0,0  \\
+  \bottomrule
+\end{tabularx}
+\label{tab:hospital}
+\end{table}
+
+Wyniki (Tab.~\ref{tab:hospital}) prowadzą do~trzech obserwacji:
+
+\begin{itemize}
+  \item \textbf{Najmocniejsze ujawnienie roli superspreaderów.} Choć~ich
+        attack rate jest praktycznie równy bazowemu (efekt sufitu,
+        Sekcja~\ref{sec:sc-super}), to~w~obciążeniu szpitala dają
+        \emph{najgorszy} wynik -- 104~osobodni vs.\ 82 w~bazowym (o~$\approx 27\%$
+        więcej). Ostrzejszy, wyższy szczyt przekłada się wprost na~większe
+        i~dłuższe przeciążenie -- to~tu, a~nie w~attack rate, materializuje się
+        koszt superspreadingu.
+  \item \textbf{Wartość spłaszczania bez eliminacji.} Szczepienia obniżają
+        attack rate ,,tylko'' o~34\%, lecz spychają szczyt popytu pod~linię
+        pojemności (7,4~$<$~8), redukując osobodni przeciążenia z~82 do~$\approx 1$.
+        Wysoka higiena nie~eliminuje przeciążenia, ale zmniejsza je
+        pięciokrotnie (82~$\to$~15,5).
+  \item \textbf{Interwencje silne eliminują kryzys.} Lockdown (natychmiastowy
+        i~reaktywny) oraz pakiet łączony utrzymują popyt trwale poniżej
+        pojemności -- zero osobodni przeciążenia.
+\end{itemize}
+
+\begin{figure}[!htbp]
+  \centering
+  \includegraphics[width=\columnwidth]{stage3_hospital.png}
+  \caption{Obciążenie systemu ochrony zdrowia. Lewo: dzienne zapotrzebowanie
+           na~łóżka ($h \cdot I(t)$) dla wybranych scenariuszy; czerwona linia
+           -- pojemność ($C=8$), zacieniony obszar -- strefa przeciążenia.
+           Prawo: osobodni ponad pojemnością dla wszystkich siedmiu scenariuszy.}
+  \label{fig:stage3-hospital}
+\end{figure}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Ograniczenia i~kierunki dalszych prac}
 \label{sec:limitations}
@@ -1117,10 +1186,12 @@ wynikające z~nich kierunki rozwoju:
         z~rozkładu Gamma (zob.\ Tab.~\ref{tab:pathogen}) dodałoby naturalną
         wariancję biologiczną -- dłuższy ogon zakażeń i~bardziej miękkie
         krzywe epidemiczne.
-  \item \textbf{Brak modelu pojemności służby zdrowia.} Węzły zdrowotne
-        istnieją, lecz nie~mają ograniczonej pojemności. Dodanie progu
-        przeciążenia szpitali i~miary ,,osobodni ponad pojemnością''
-        wzmocniłoby argument o~,,spłaszczaniu krzywej''.
+  \item \textbf{Pojemność szpitala bez sprzężenia ze~śmiertelnością.}
+        Obciążenie systemu i~osobodni ponad pojemnością wyznaczono
+        (Sekcja~\ref{sec:hospital}), lecz przeciążenie nie~zwiększa jeszcze
+        zwrotnie współczynnika śmiertelności. Mechanistyczne sprzężenie
+        ,,brak łóżka~$\to$~wyższe CFR'' uczyniłoby koszt niekontrolowanej
+        epidemii jeszcze bardziej wymiernym.
   \item \textbf{Skończony rozmiar populacji.} $N = 500$ wprowadza efekty
         skończonego rozmiaru (stochastyczne wygasanie, szum $R_e(t)$ przy
         małym~$I$). Wskazane jest badanie skalowania wyników z~$N$.
@@ -1193,7 +1264,9 @@ epidemiologicznych:
         efekt sufitu}: 5\% populacji o~wysokim \texttt{contact\_rate} i~niskim
         $\Theta_H$ zwiększa $I_{\max}$ o~$\approx 10\%$; brak wzrostu attack rate
         wynika z~nasycenia scenariusza bazowego, nie~z~braku wpływu
-        (zasada 80/20~\cite{lloyd2001realistic}).
+        (zasada 80/20~\cite{lloyd2001realistic}). Ich rzeczywisty koszt
+        ujawnia się w~obciążeniu szpitali -- \emph{najwyższym} ze~wszystkich
+        scenariuszy (Sekcja~\ref{sec:hospital}).
   \item \textbf{Higiena rąk spłaszcza krzywą, ale nie~eliminuje epidemii}:
         przejście z~$\bar{\Theta}_H = 0{,}15$ do~$0{,}85$ obniża attack rate
         o~$\approx 19$~p.p., redukuje szczyt o~ponad~40\% i~opóźnia go~o~$\approx 9$~dni.
