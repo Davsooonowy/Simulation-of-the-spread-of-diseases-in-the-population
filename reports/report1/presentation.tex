@@ -1,11 +1,16 @@
 % Prezentacja Beamer -- Wieloskalowa agentowa symulacja pandemii
 % Dawid Mularczyk, WI AGH, 2026
 
-\documentclass[polish,10pt]{beamer}
+\documentclass[aspectratio=1610, polish]{beamer}
 
+\usepackage{babel}
+\makeatletter
+\@ifclasswith{beamer}{polish}{
+  \usepackage{polski}
+}
+\makeatother
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[polish]{babel}
 \usepackage{booktabs}
 \usepackage{tabularx}
 \usepackage{graphicx}
@@ -13,17 +18,35 @@
 \usepackage{xcolor}
 \usepackage{caption}
 
-\usetheme{Madrid}
-\usecolortheme{whale}
+\mode<beamer>{
+  \definecolor{links}{HTML}{2A1B81}
+  \hypersetup{
+    pdfpagemode=FullScreen,
+    colorlinks,
+    linkcolor=,
+    urlcolor=links
+  }
+  \usetheme[nosidebar,margins=2em]{AGH}
+}
+\mode<handout>{
+  \hypersetup{pdfpagemode=None}
+  \usepackage{pgfpages}
+  \pgfpagesuselayout{4 on 1}[a4paper,border shrink=5mm,landscape]
+  \usetheme{boxes}
+}
+
 \setbeamertemplate{navigation symbols}{}
 \setbeamertemplate{caption}[numbered]
 
 \newcolumntype{Y}{>{\small\centering\arraybackslash}X}
 
-% ---- STOPKA: lewa kolumna = Dawid Mularczyk - WI AGH ----
-\author[Dawid Mularczyk -- WI AGH]{Dawid Mularczyk}
-\institute[WI AGH]{Wydział Informatyki, Akademia Górniczo-Hutnicza\\[4pt]
-  \texttt{muldaw@student.agh.edu.pl}}
+\author[D. Mularczyk -- WI AGH]{Dawid Mularczyk\\
+  {\scriptsize \href{mailto:muldaw@student.agh.edu.pl}{muldaw@student.agh.edu.pl}}
+}
+\institute[WI AGH]{Wydział Informatyki\\
+  Akademia Górniczo-Hutnicza\\
+  30-059 Kraków
+}
 \title[Symulacja pandemii -- ABM]{Wieloskalowa agentowa symulacja\\
   rozprzestrzeniania się pandemii wirusowej}
 \subtitle{Projekt studencki -- Etapy 1, 2 i~3}
@@ -32,9 +55,7 @@
 % ============================================================
 \begin{document}
 
-\begin{frame}
-  \titlepage
-\end{frame}
+\maketitle
 
 \begin{frame}{Plan prezentacji}
   \tableofcontents
@@ -158,13 +179,13 @@
       P_{\text{inf}} = \Bigl(1 - \prod_{i}(1-p_{\text{eff},i})^{v_i}\Bigr)
         \cdot (1 - \text{immunity})
     \]
-    Modifikatory $p_{\text{eff}}$: maseczki $(\eta_M=0{,}5)$,\\
-    dystans społeczny $(-20\%)$,\\
-    higiena $h = 1 - 0{,}6\cdot(\bar{\Theta}_H - 0{,}5)$.
+    Modyfikatory $p_{\text{eff}}$: maseczki $(\eta_M=0{,}5)$,\\
+    dystans społ.\ $(-20\%)$,
+    higiena $h = 1\!-\!0{,}6(\bar{\Theta}_H\!-\!0{,}5)$.
 
-    \begin{alertblock}{\texttt{MAX\_INFECTIOUS\_CONTACTS = 5}}
-      Każdy podatny losuje co najwyżej 5 zakaźnych\\
-      agentów -- eliminuje saturację w dużych węzłach.
+    \begin{alertblock}{Limit kontaktów: \texttt{MAX\_INFECTIOUS\_CONTACTS=5}}
+      \small Losowanie co najwyżej 5 zakaźnych kontaktów
+      -- eliminuje saturację w dużych węzłach.
     \end{alertblock}
 
     \column{0.46\textwidth}
@@ -234,20 +255,19 @@
     \column{0.52\textwidth}
     \textbf{3 krytyczne błędy naprawione w~Etapie~2:}
 
-    \begin{enumerate}
+    \begin{enumerate}\small
       \item \textbf{Super-węzeł} -- skalowanie liczby węzłów z~$N$;
-            np.\ $N=500$: 125 domów, 20 biur, 16 szkół.
-      \item \textbf{Mega-autobus} -- tranzyt grupowany po \emph{konkretnym}
-            węźle~ID (nie po typie POI); pierwotnie wszyscy jadący do ,,biur''
-            wchodzili do jednego pojazdu $\Rightarrow R_0 \gg 10$.
-      \item \textbf{Saturacja} -- \texttt{MAX\_INFECTIOUS\_CONTACTS = 5}
-            eliminuje nierealistyczną kumulację siły zakażenia.
+            $N=500$: 125 domów, 20 biur, 16 szkół.
+      \item \textbf{Mega-autobus} -- tranzyt grupowany po konkretnym
+            węźle~ID; wszyscy do ,,biur'' w~jednym pojeździe
+            $\Rightarrow R_0 \gg 10$.
+      \item \textbf{Saturacja} -- \texttt{MAX\_INFECTIOUS\_CONTACTS=5}
+            eliminuje kumulację siły zakażenia.
     \end{enumerate}
 
-    \vspace{0.2cm}
-    \textbf{Kalibracja końcowa:}\\
-    $p_{\text{mult}} = 0{,}16$ $\Rightarrow$ attack rate $\approx 80\%$;
-    empiryczne $R_0 \approx 1{,}9$ (zmierzone w~Etapie~3)
+    \vspace{0.1cm}
+    {\small\textbf{Kalibracja:} $p_{\text{mult}} = 0{,}16$
+    $\Rightarrow$ AR $\approx 80\%$; empiryczne $R_0 \approx 1{,}9$}
 
     \column{0.46\textwidth}
     \textbf{Stos technologiczny:}
@@ -259,10 +279,10 @@
       \item \textbf{pytest} -- 25 testów
     \end{itemize}
 
-    \vspace{0.3cm}
-    \includegraphics[width=\textwidth]{sensitivity_heatmap.png}
+    \vspace{0.05cm}
+    \includegraphics[width=\textwidth,height=0.28\textheight,keepaspectratio]{sensitivity_heatmap.png}
 
-    \vspace{0.1cm}
+    \vspace{0.05cm}
     {\small\textit{Analiza wrażliwości: peak~I i~AR\\
     vs.\ $p_{\text{mult}}$ i $\eta_M$.}}
   \end{columns}
@@ -274,19 +294,19 @@
     \textbf{Dashboard Streamlit}\\
     {\small Parametry, wykresy SEIRD i~statystyki końcowe}
 
-    \vspace{0.15cm}
-    \includegraphics[width=\textwidth]{screenshot_dashboard.png}
+    \vspace{0.1cm}
+    \includegraphics[width=\textwidth,height=0.38\textheight,keepaspectratio]{screenshot_dashboard.png}
 
     \column{0.48\textwidth}
     \textbf{Animacja real-time (canvas)}\\
     {\small Agenci poruszają się między węzłami POI.\\
     Interwencje aplikowane \emph{na~żywo}, bez restartu.}
 
-    \vspace{0.15cm}
-    \includegraphics[width=\textwidth]{screenshot_canvas.png}
+    \vspace{0.1cm}
+    \includegraphics[width=\textwidth,height=0.38\textheight,keepaspectratio]{screenshot_canvas.png}
   \end{columns}
 
-  \vspace{0.3cm}
+  \vspace{0.1cm}
   \begin{block}{Kluczowa zaleta real-time canvas \quad{\small[\textit{demo na żywo}]}}
     Włączenie lockdownu lub maseczek w~trakcie epidemii i~natychmiastowa
     obserwacja spłaszczenia krzywej -- bez restartowania symulacji.
@@ -443,27 +463,27 @@
 \end{frame}
 
 \begin{frame}{Wyniki zbiorcze}
-  \begin{table}
-    \centering
-    \caption{Mediany wyników -- 7~scenariuszy, $N=500$, 7~powtórzeń, 180~kroków}
-    \scalebox{0.86}{
-    \begin{tabularx}{1.16\textwidth}{@{}lYYYY@{}}
-      \toprule
-      \textbf{Scenariusz} & \textbf{Attack rate} & \textbf{Peak~I} &
-        \textbf{Dzień} & \textbf{Zgony} \\
-      \midrule
-      Bazowy (brak interw.) & 79,7\% & 91  & 34 & 7 \\
-      \textbf{Lockdown natychm.} & \textbf{3,5\%} & \textbf{14} & 8 & \textbf{$<$1} \\
-      Lockdown reaktywny (d.9) & 13,2\% & 38 & 13 & 2 \\
-      Szczepienia 60\%   & 52,6\% & 49  & 31 & 4 \\
-      Superspreaderzy 5\% & 79,3\% & 100 & 35 & 9 \\
-      Wysoka higiena     & 61,7\% & 63  & 43 & 7 \\
-      \textbf{Interwencje łączone} & \textbf{11,7\%} & \textbf{16} & 11 & \textbf{$<$1} \\
-      \bottomrule
-    \end{tabularx}}
-  \end{table}
+  {\footnotesize\textit{Mediany -- 7 scenariuszy, $N=500$, 7 powtórzeń, 180 kroków}}
 
-  \vspace{0.1cm}
+  \vspace{0.05cm}
+  \centering
+  \scalebox{0.84}{
+  \begin{tabularx}{1.19\textwidth}{@{}lYYYY@{}}
+    \toprule
+    \textbf{Scenariusz} & \textbf{Attack rate} & \textbf{Peak~I} &
+      \textbf{Dzień} & \textbf{Zgony} \\
+    \midrule
+    Bazowy (brak interw.) & 79,7\% & 91  & 34 & 7 \\
+    \textbf{Lockdown natychm.} & \textbf{3,5\%} & \textbf{14} & 8 & \textbf{$<$1} \\
+    Lockdown reaktywny (d.9) & 13,2\% & 38 & 13 & 2 \\
+    Szczepienia 60\%   & 52,6\% & 49  & 31 & 4 \\
+    Superspreaderzy 5\% & 79,3\% & 100 & 35 & 9 \\
+    Wysoka higiena     & 61,7\% & 63  & 43 & 7 \\
+    \textbf{Interwencje łączone} & \textbf{11,7\%} & \textbf{16} & 11 & \textbf{$<$1} \\
+    \bottomrule
+  \end{tabularx}}
+
+  \vspace{0.05cm}
   \begin{columns}
     \column{0.5\textwidth}
     \textcolor{teal}{\textbf{Najskuteczniejsze:}} Lockdown natychm.\ ($-96\%$ AR)\\
