@@ -92,57 +92,102 @@ def _snapshot(model: EpidemicModel) -> dict:
     }
 
 
+_START_DEFAULTS = dict(
+    n_agents=500,
+    initial_infected_frac=0.02,
+    mask_coverage=0.0,
+    social_distancing_coverage=0.0,
+    vaccination_coverage=0.0,
+    lockdown=False,
+    p_base_multiplier=1.0,
+    p_transit=0.05,
+    incubation_period=4,
+    infectious_period=8,
+    p_death=0.02,
+    seed=12345,
+)
+
+
 def _reset(params: dict) -> None:
-    st.session_state.model = EpidemicModel(**params)
+    init_kw = {k: v for k, v in params.items() if k != "seed"}
+    seed = params.get("seed")
+    if seed is not None:
+        init_kw["seed"] = int(seed)
+    st.session_state.model = EpidemicModel(**init_kw)
     st.session_state.running = False
     st.session_state.step_count = 0
     st.session_state.history: list[dict] = [_snapshot(st.session_state.model)]
-    st.session_state.params = params
+    st.session_state.start_params = params
+    st.session_state.live_mask = params["mask_coverage"]
+    st.session_state.live_sd   = params["social_distancing_coverage"]
+
+
+def _apply_live(model: EpidemicModel, lockdown: bool, mask_cov: float, sd_cov: float) -> None:
+    """Apply live interventions to a running model without restarting it."""
+    model.lockdown = lockdown
+
+    prev_mask = st.session_state.get("live_mask", mask_cov)
+    if abs(mask_cov - prev_mask) > 1e-6:
+        import random as _rng
+        for agent in model.schedule.agents:
+            agent.wears_mask = _rng.random() < mask_cov
+        st.session_state.live_mask = mask_cov
+
+    prev_sd = st.session_state.get("live_sd", sd_cov)
+    if abs(sd_cov - prev_sd) > 1e-6:
+        import random as _rng
+        for agent in model.schedule.agents:
+            agent.social_distancing = _rng.random() < sd_cov
+        st.session_state.live_sd = sd_cov
 
 
 if "model" not in st.session_state:
-    _reset(dict(
-        n_agents=150,
-        initial_infected_frac=0.05,
-        mask_coverage=0.0,
-        social_distancing_coverage=0.0,
-        vaccination_coverage=0.0,
-        lockdown=False,
-        p_base_multiplier=0.6,
-        p_transit=0.05,
-    ))
+    _reset(_START_DEFAULTS)
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.title("Parametry")
+    st.title("Symulacja — live")
 
-    n_agents    = st.slider("Liczba agentow", 50, 500, 150, step=50)
-    init_inf    = st.slider("Startowe zakazenia (%)", 1, 20, 5) / 100
-    max_steps   = st.slider("Maks. krokow", 50, 300, 150)
-    speed_ms    = st.slider("Predkosc (ms/krok)", 50, 1000, 400, step=50)
-    p_mult      = st.slider("Zakaznosc (mnoznik)", 0.1, 2.0, 0.6, step=0.1)
-    p_transit   = st.slider("Transmisja w transporcie", 0.00, 0.20, 0.05, step=0.01)
+    # ── Start parameters (require Reset / Play to apply) ──────────────────
+    with st.expander("Parametry startowe (wymagaja resetu)", expanded=False):
+        n_agents  = st.slider("Liczba agentow", 50, 500,
+                              _START_DEFAULTS["n_agents"], step=50)
+        init_inf  = st.slider("Startowe zakazenia (%)", 1, 20, 2) / 100
+        max_steps = st.slider("Maks. krokow", 50, 300, 180)
+        p_mult    = st.slider("Zakaznosc (mnoznik p_base)", 0.1, 2.0, 1.0, step=0.1)
+        p_transit = st.slider("Transmisja w transporcie", 0.00, 0.20, 0.05, step=0.01)
+        vacc_pct  = st.slider("Szczepienia przy starcie (%)", 0, 100, 0) / 100
+        seed_val  = st.number_input("Ziarno losowosci (seed)", value=12345, step=1)
+
+    speed_ms = st.slider("Predkosc (ms/krok)", 50, 800, 250, step=50)
+
+    # ── Live interventions (apply without reset) ──────────────────────────
+    st.subheader("Interwencje — na zywo")
+    st.caption("Zmieniaj w trakcie dzialania symulacji — bez restartu.")
+    lockdown = st.checkbox("Lockdown (zamknij biura i szkoly)",
+                           value=st.session_state.model.lockdown)
+    mask_pct = st.slider("Maseczki (%)", 0, 100,
+                         int(st.session_state.get("live_mask", 0) * 100)) / 100
+    sd_pct   = st.slider("Dystans spoleczny (%)", 0, 100,
+                         int(st.session_state.get("live_sd", 0) * 100)) / 100
 
     st.divider()
-    st.subheader("Interwencje")
-    mask_pct    = st.slider("Maseczki (%)", 0, 100, 0) / 100
-    sd_pct      = st.slider("Dystans spoleczny (%)", 0, 100, 0) / 100
-    vacc_pct    = st.slider("Szczepienia (%)", 0, 100, 0) / 100
-    lockdown    = st.checkbox("Lockdown")
-
-    st.divider()
-    params = dict(
+    start_params = dict(
         n_agents=n_agents,
         initial_infected_frac=init_inf,
-        mask_coverage=mask_pct,
-        social_distancing_coverage=sd_pct,
+        mask_coverage=0.0,
+        social_distancing_coverage=0.0,
         vaccination_coverage=vacc_pct,
-        lockdown=lockdown,
+        lockdown=False,
         p_base_multiplier=p_mult,
         p_transit=p_transit,
+        incubation_period=4,
+        infectious_period=8,
+        p_death=0.02,
+        seed=seed_val,
     )
 
     col_play, col_pause = st.columns(2)
@@ -150,13 +195,13 @@ with st.sidebar:
         play_btn  = st.button("Play",  use_container_width=True, type="primary")
     with col_pause:
         pause_btn = st.button("Pause", use_container_width=True)
-    reset_btn = st.button("Reset", use_container_width=True)
+    reset_btn = st.button("Reset (nowe parametry)", use_container_width=True)
 
     if reset_btn:
-        _reset(params)
+        _reset(start_params)
     if play_btn:
-        if st.session_state.params != params:
-            _reset(params)
+        if st.session_state.get("start_params") != start_params:
+            _reset(start_params)
         st.session_state.running = True
     if pause_btn:
         st.session_state.running = False
@@ -170,10 +215,16 @@ with st.sidebar:
         )
 
 # ---------------------------------------------------------------------------
-# Header metrics
+# Apply live interventions to the running model
 # ---------------------------------------------------------------------------
 
 model = st.session_state.model
+_apply_live(model, lockdown, mask_pct, sd_pct)
+
+# ---------------------------------------------------------------------------
+# Header metrics
+# ---------------------------------------------------------------------------
+
 step  = st.session_state.step_count
 snap  = st.session_state.history[-1]
 
